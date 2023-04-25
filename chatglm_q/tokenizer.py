@@ -15,7 +15,7 @@ class ChatGLMTokenizer:
         assert vocab_file is not None
         self.vocab_file = vocab_file
         self.special_tokens = ["[MASK]", "[gMASK]", "[sMASK]", "<unused_0>", "<sop>", "<eop>", "<ENC>", "<dBLOCK>"]
-        self.text_tokenizer = SentencePieceProcessor(vocab_file)
+        self.text_tokenizer = SentencePieceProcessor(str(vocab_file))
 
     def __len__(self):
         return len(self.text_tokenizer)
