@@ -4,7 +4,7 @@ from pathlib import Path
 from collections import OrderedDict
 import torch
 from tqdm.auto import tqdm
-from safetensors.torch import save_file, load_file
+from safetensors.torch import save_file, load_file, safe_open
 from .model import ChatGLMModel, ChatGLMConfig
 
 
@@ -21,6 +21,26 @@ def create_quant_model():
 
 
 @torch.no_grad()
+def load_quant_model(state_dict_path: str):
+    model = create_quant_model()
+    state_dict = dict(**model.state_dict())
+
+    with safe_open(state_dict_path, framework="pt") as f:
+        for k in f.keys():
+            if k not in state_dict:
+                print(f'"{k}" is ignored')
+                continue
+            v = f.get_tensor(k)
+            state_dict[k].copy_(v.type_as(state_dict[k]).to(state_dict[k].device))
+            state_dict.pop(k)
+
+    if len(state_dict):
+        print(f'model weights "{", ".join(state_dict.keys())}" are not initialized')
+
+    return model
+
+
+@torch.no_grad()
 def load_state_dict(model_path: str, model: ChatGLMModel = None, dtype = None):
     if model is None:
         model = ChatGLMModel(ChatGLMConfig(), dtype)
@@ -33,12 +53,13 @@ def load_state_dict(model_path: str, model: ChatGLMModel = None, dtype = None):
 
         for k, v in part.items():
             if k not in state_dict:
-                print(f'"{k}" not in model state dict')
+                print(f'"{k}" is ignored')
+                continue
             state_dict[k].copy_(v.type_as(state_dict[k]).to(state_dict[k].device))
             state_dict.pop(k)
 
     if len(state_dict):
-        print(f'{", ".join(state_dict.keys())} are not used')
+        print(f'model weights "{", ".join(state_dict.keys())}" are not initialized')
 
     return model
 

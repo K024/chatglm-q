@@ -38,13 +38,13 @@ def precompute_freqs_cis(dim: int, length: int, theta = 10000.0):
 
 
 def apply_rotary_emb(
-    x: Tensor,            # (n_batch, n_seq, n_head, d_head)
+    x_r: Tensor,          # (n_batch, n_seq, n_head, d_head // 2)
+    x_i: Tensor,          # (n_batch, n_seq, n_head, d_head // 2)
     freqs_cis_r: Tensor,  # (n_batch, n_seq, d_head // 2)
     freqs_cis_i: Tensor,  # (n_batch, n_seq, d_head // 2)
 ) -> Tensor:
     freqs_cis_r = freqs_cis_r[:, :, None, :]
     freqs_cis_i = freqs_cis_i[:, :, None, :]
-    x_r, x_i = torch.chunk(x, 2, dim=-1)
     o_r = x_r * freqs_cis_r - x_i * freqs_cis_i
     o_i = x_r * freqs_cis_i + x_i * freqs_cis_r
     return torch.cat([o_r, o_i], dim=-1)
@@ -77,6 +77,17 @@ def gelu(x):
     return 0.5 * x * (1.0 + torch.tanh(0.7978845608028654 * x * (1.0 + 0.044715 * x ** 2)))
 
 
+# use jit script to create the IF node
+@torch.jit.script_if_tracing
+def merge_kv_cache(k: Tensor, v: Tensor, kv_cache: tuple[Tensor, Tensor], use_past: torch.BoolTensor):
+    if use_past:
+        k_cache, v_cache = kv_cache
+        k = torch.cat([k_cache, k], dim=1)
+        v = torch.cat([v_cache, v], dim=1)
+    kv_cache = (k.detach(), v.detach())
+    return k, v, kv_cache
+
+
 class GLMAttention(nn.Module):
     def __init__(
         self,
@@ -91,7 +102,7 @@ class GLMAttention(nn.Module):
         super().__init__()
         self.n_head = n_head
         self.d_head = n_state // n_head
-        assert self.d_head * n_head == n_state
+        assert n_state % (n_head * 4) == 0
         self.layer_idx = layer_idx
         self.pe_2d = pe_2d
         self.qkv_proj = Linear(n_state, n_state * 3, bias=bias, dtype=dtype)
@@ -123,36 +134,30 @@ class GLMAttention(nn.Module):
             Shape: (n_batch, n_seq - n_new, n_head, d_head)
         '''
         n_batch, n_seq, _ = x.shape
-        fused_qkv = self.qkv_proj(x).view(n_batch, n_seq, self.n_head, -1)
+        fused_qkv = self.qkv_proj(x).view(n_batch, n_seq, self.n_head, self.d_head * 3)
         # split chunks on reshaped qkv results
-        q, k, v = torch.chunk(fused_qkv, 3, dim=-1)
-
-        q = q.contiguous().view(n_batch, n_seq, self.n_head, -1)
-        k = k.contiguous().view(n_batch, n_seq, self.n_head, -1)
-        v = v.contiguous().view(n_batch, n_seq, self.n_head, -1)
+        # use torch.split to make onnx simpler
+        q, k, v = torch.split(fused_qkv, self.d_head, dim=-1)
 
         if self.pe_2d: # 2d positional encoding, why not token_type_id embedding?
-            q1, q2 = q.chunk(2, dim=-1)
-            k1, k2 = k.chunk(2, dim=-1)
+            emb_dim = self.d_head // 4
+            q1_r, q1_i, q2_r, q2_i = torch.split(q, emb_dim, dim=-1)
+            k1_r, k1_i, k2_r, k2_i = torch.split(k, emb_dim, dim=-1)
             freqs_cis_0, freqs_cis_1 = freqs_cis
-            q1 = apply_rotary_emb(q1, *freqs_cis_0)
-            q2 = apply_rotary_emb(q2, *freqs_cis_1)
-            k1 = apply_rotary_emb(k1, *freqs_cis_0)
-            k2 = apply_rotary_emb(k2, *freqs_cis_1)
+            q1 = apply_rotary_emb(q1_r, q1_i, *freqs_cis_0)
+            q2 = apply_rotary_emb(q2_r, q2_i, *freqs_cis_1)
+            k1 = apply_rotary_emb(k1_r, k1_i, *freqs_cis_0)
+            k2 = apply_rotary_emb(k2_r, k2_i, *freqs_cis_1)
             q = torch.cat([q1, q2], dim=-1)
             k = torch.cat([k1, k2], dim=-1)
         else:
-            q = apply_rotary_emb(q, *freqs_cis)
-            k = apply_rotary_emb(k, *freqs_cis)
+            emb_dim = self.d_head // 2
+            q_r, q_i = torch.split(q, emb_dim, dim=-1)
+            k_r, k_i = torch.split(k, emb_dim, dim=-1)
+            q = apply_rotary_emb(q_r, q_i, *freqs_cis)
+            k = apply_rotary_emb(k_r, k_i, *freqs_cis)
 
-        if kv_cache is not None:
-            k_cache, v_cache = kv_cache
-            k = torch.cat([k_cache, k], dim=1)
-            v = torch.cat([v_cache, v], dim=1)
-        if use_past:
-            kv_cache = (k.detach(), v.detach())
-        else:
-            kv_cache = None
+        k, v, kv_cache = merge_kv_cache(k, v, kv_cache, use_past)
 
         scaling_coeff = float(self.layer_idx + 1)
         d_head = q.shape[-1]
@@ -255,7 +260,7 @@ class ChatGLMModel(nn.Module):
         ])
         self.final_ln = LayerNorm(
             config.hidden_size, eps=config.layernorm_epsilon, dtype=dtype)
-        self.lm_head = nn.Linear(
+        self.lm_head = Linear(
             config.hidden_size, config.vocab_size, bias=False, dtype=dtype)
 
         d_freqs_cis = config.hidden_size // config.num_attention_heads
@@ -356,7 +361,7 @@ class ChatGLMModel(nn.Module):
                 freqs_cis=freqs_cis,
                 attention_mask=attention_mask,
                 kv_cache=kv_cache,
-                use_past=use_past
+                use_past=use_past and has_past_key_values
             )
             if use_past:
                 current_key_values += (kv_cache, )
