@@ -46,13 +46,18 @@ class DynamicQuantizeMatMul(torch.autograd.Function):
             if A.device.type == "cuda" and _dynamic_quant_matmul_transposed_impl is not None:
                 grad_A = _dynamic_quant_matmul_transposed_impl(grad_out, B, b_scale)
             else:
-                grad_A = grad_out.matmul((B * b_scale).t())
+                grad_A = grad_out.matmul(B.t() * b_scale[:, None])
 
         return grad_A, None, None
 
     @staticmethod
     def symbolic(g: torch.Graph, A, B, b_scale) -> torch.Value:
-        return g.op("com.microsoft::DynamicQuantizeMatMul", A, B, b_scale)
+        # symbolic tracking, equavalent to:
+        # return g.op("com.microsoft::DynamicQuantizeMatMul", A, B, b_scale)
+        A_quant, A_scale, A_zero = g.op("DynamicQuantizeLinear", A, outputs=3)
+        C = g.op("MatMulInteger", A_quant, B, A_zero, torch.tensor(0, dtype=torch.int8))
+        C = g.op("Cast", C, to_i=1) # AttributeProto.AttributeType.FLOAT=1
+        return g.op("Mul", C, g.op("Mul", A_scale, b_scale))
 
 
 def dynamic_quant_matmul(A: Tensor, B: torch.CharTensor, b_scale: Tensor) -> Tensor:

@@ -26,5 +26,6 @@ setup(
         "tqdm",
         "safetensors",
         "sentencepiece",
+        "huggingface_hub",
     ],
 )
