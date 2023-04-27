@@ -2,7 +2,7 @@
 import torch
 from chatglm_q.loader import load_state_dict, load_quant_model
 
-# model = load_state_dict("../models/chatglm-6b-safe")
+# model = load_state_dict("../models/chatglm-6b-safe", dtype=torch.half)
 model = load_quant_model("../models/chatglm-6b-int8.safetensors")
 
 # %%
