@@ -1,4 +1,4 @@
 
-# chatglm-onnx
+# chatglm-q
 
-Export [ChatGLM-6B](https://huggingface.co/THUDM/chatglm-6b) to ONNX and run with [ONNXRuntime](https://onnxruntime.ai/).
+[ChatGLM-6B](https://huggingface.co/THUDM/chatglm-6b) optimized for quantization and exporting to ONNX.
