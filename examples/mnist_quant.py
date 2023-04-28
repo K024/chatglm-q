@@ -90,6 +90,6 @@ out, = model.run(["output"], { "input": data })
 
 # %%
 print("mean error:", ((q_out - out) ** 2).mean())
-print("different predictions:", (q_out.argmax(-1) - out.argmax(-1)).bool().sum())
+print("different predictions:", (q_out.argmax(-1) - out.argmax(-1)).astype(bool).sum())
 
 # %%

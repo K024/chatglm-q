@@ -9,15 +9,14 @@ def my_test_suite():
 
 
 setup(
-    name="chatglm-onnx",
+    name="chatglm-q",
     version="0.0.1-alpha0",
     author="K024",
-    description="ChatGLM optimized for ONNX export and ONNXRuntime execution",
-    url="https://github.com/K024/chatglm-onnx", 
+    description="ChatGLM optimized for quantization and ONNX export",
+    url="https://github.com/K024/chatglm-q", 
 
     packages=[
         "chatglm_q",
-        "chatglm_onnx",
     ],
 
     test_suite="setup.my_test_suite",

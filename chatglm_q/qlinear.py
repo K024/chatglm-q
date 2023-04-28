@@ -49,15 +49,24 @@ class DynamicQuantizeMatMul(torch.autograd.Function):
                 grad_A = grad_out.matmul(B.t() * b_scale[:, None])
 
         return grad_A, None, None
+    
+    ONNX_CPU_ONLY = True
 
     @staticmethod
     def symbolic(g: torch.Graph, A, B, b_scale) -> torch.Value:
-        # symbolic tracking, equavalent to:
-        # return g.op("com.microsoft::DynamicQuantizeMatMul", A, B, b_scale)
-        A_quant, A_scale, A_zero = g.op("DynamicQuantizeLinear", A, outputs=3)
-        C = g.op("MatMulInteger", A_quant, B, A_zero, torch.tensor(0, dtype=torch.int8))
-        C = g.op("Cast", C, to_i=1) # AttributeProto.AttributeType.FLOAT=1
-        return g.op("Mul", C, g.op("Mul", A_scale, b_scale))
+        if DynamicQuantizeMatMul.ONNX_CPU_ONLY:
+            # return g.op("com.microsoft::DynamicQuantizeMatMul", A, B, b_scale)
+            A_quant, A_scale, A_zero = g.op("DynamicQuantizeLinear", A, outputs=3)
+            C = g.op("MatMulInteger", A_quant, B, A_zero, torch.tensor(0, dtype=torch.int8))
+            C = g.op("Cast", C, to_i=1) # TensorProto.DataType.FLOAT=1
+            return g.op("Mul", C, g.op("Mul", A_scale, b_scale))
+        else:
+            # is unstable on CUDA and produces NaN
+            A_scale = g.op("Div", g.op("ReduceMax", g.op("Abs", A), keepdims_i=0), torch.tensor(127, dtype=torch.float32))
+            A_quant = g.op("QuantizeLinear", A, A_scale, torch.tensor(0, dtype=torch.int8))
+            C = g.op("MatMulInteger", A_quant, B, torch.tensor(0, dtype=torch.int8), torch.tensor(0, dtype=torch.int8))
+            C = g.op("Cast", C, to_i=1) # TensorProto.DataType.FLOAT=1
+            return g.op("Mul", C, g.op("Mul", A_scale, b_scale))
 
 
 def dynamic_quant_matmul(A: Tensor, B: torch.CharTensor, b_scale: Tensor) -> Tensor:

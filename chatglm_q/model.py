@@ -307,12 +307,11 @@ class ChatGLMModel(nn.Module):
             freqs_cis = tuple(F.embedding(positions, emb) for emb in self.freqs_cis_cache)
 
         # causal mask with full prefix attention
-        attention_mask = (
-            torch.tril(torch.ones((n_batch, n_seq, n_seq), device=device).bool())
-            | input_prefix_mask.unsqueeze(1).bool()
-        )
-        # cast 0 => -inf, 1 => 0
-        attention_mask = attention_mask.int().log().type_as(input_embeddings)
+        # trilu is not supported in onnxruntime
+        seq = torch.arange(n_seq, device=device)
+        causal_mask = (seq[:, None] < seq[None, :])
+        attention_mask = (causal_mask[None, ...] & ~input_prefix_mask[:, None, :].bool()).float() * -1e10
+
         if has_past_key_values:
             attention_mask = attention_mask[:, -n_new:, :].contiguous()
 
@@ -361,7 +360,7 @@ class ChatGLMModel(nn.Module):
                 freqs_cis=freqs_cis,
                 attention_mask=attention_mask,
                 kv_cache=kv_cache,
-                use_past=use_past and has_past_key_values
+                use_past=has_past_key_values and use_past
             )
             if use_past:
                 current_key_values += (kv_cache, )
