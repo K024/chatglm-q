@@ -21,7 +21,7 @@ from chatglm_q.decoder import ChatGLMDecoder
 decoder = ChatGLMDecoder(model, tokenizer, device=device)
 
 # %%
-for text in decoder.generate("[Round 0]\n问：我是谁？\n答：", tokenizer["<eop>"]):
+for text in decoder.generate("[Round 0]\n问：我是谁？\n答："):
     print(text)
 
 # %%

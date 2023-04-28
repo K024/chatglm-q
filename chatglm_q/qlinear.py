@@ -22,7 +22,6 @@ class DynamicQuantizeMatMul(torch.autograd.Function):
     A: tensor(float) m × k
     B: tensor(int8) k × n
     b_scale: tensor(float) n
-    b_zero_point: tensor(int8) n
 
     In PyTorch, the weigth is dequantized first.
     '''

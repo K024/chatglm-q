@@ -9,15 +9,15 @@ from .model import ChatGLMModel, ChatGLMConfig
 
 
 def create_quant_model():
-    from . import model
-    from .qlinear import DynamicQuantizeLinear, QEmbedding
-    prev_linear, prev_embedding = model.Linear, model.Embedding
-    model.Linear, model.Embedding = DynamicQuantizeLinear, QEmbedding
+    try:
+        from . import model as modeling
+        from .qlinear import DynamicQuantizeLinear, QEmbedding
+        prev_linear, prev_embedding = modeling.Linear, modeling.Embedding
+        modeling.Linear, modeling.Embedding = DynamicQuantizeLinear, QEmbedding
 
-    model = ChatGLMModel(ChatGLMConfig())
-
-    model.Linear, model.Embedding = prev_linear, prev_embedding
-    return model
+        return ChatGLMModel(ChatGLMConfig())
+    finally:
+        modeling.Linear, modeling.Embedding = prev_linear, prev_embedding
 
 
 @torch.no_grad()
