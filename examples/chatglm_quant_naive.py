@@ -23,11 +23,11 @@ for name, module in model.named_modules():
         linear_layers[name] = module
 
 for name, module in tqdm(linear_layers.items()):
-    module_path = name.split(".")
-    parent = model.get_submodule(".".join(module_path[:-1]))
+    parent_path, module_name = name.rsplit(".", 1)
+    parent = model.get_submodule(parent_path)
 
     module = get_quant_int8_linear(module)
-    setattr(parent, module_path[-1], module)
+    setattr(parent, module_name, module)
 
 # %%
 from safetensors.torch import save_file

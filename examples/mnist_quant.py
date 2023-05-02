@@ -46,11 +46,11 @@ for module in qlayers.values():
 
 # %%
 for name, module in qlayers.items():
-    path = name.split(".")
-    parent = qmodel.get_submodule(".".join(path[:-1]))
+    parent_path, module_name = name.rsplit(".")
+    parent = qmodel.get_submodule(parent_path)
     # Compare with naive quantization
-    # setattr(parent, path[-1], get_quant_int8_linear(module.layer))
-    setattr(parent, path[-1], module.get_quantized_linear(pring_loss=True))
+    # setattr(parent, module_name, get_quant_int8_linear(module.layer))
+    setattr(parent, module_name, module.get_quantized_linear(pring_loss=True))
 
 # %%
 print("mean error:", ((qmodel(data) - model(data)) ** 2).mean())

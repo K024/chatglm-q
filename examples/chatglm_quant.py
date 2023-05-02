@@ -74,9 +74,9 @@ for layer_idx in tqdm(range(num_layers)):
 
     for name, module in qlayers.items():
         module.remove_hook()
-        path = name.split(".")
-        parent = layer.get_submodule(".".join(path[:-1]))
-        setattr(parent, path[-1], module.get_quantized_linear(pring_loss=True))
+        parent_path, module_name = name.rsplit(".", 1)
+        parent = layer.get_submodule(parent_path)
+        setattr(parent, module_name, module.get_quantized_linear(pring_loss=True))
 
 del qlayers
 
