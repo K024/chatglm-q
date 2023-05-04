@@ -11,7 +11,7 @@ from .model import ChatGLMModel, ChatGLMConfig
 def create_quant_model():
     try:
         from . import model as modeling
-        from .qlinear import DynamicQuantizeLinear, QEmbedding
+        from .int8.qlinear import DynamicQuantizeLinear, QEmbedding
         prev_linear, prev_embedding = modeling.Linear, modeling.Embedding
         modeling.Linear, modeling.Embedding = DynamicQuantizeLinear, QEmbedding
 
@@ -31,7 +31,9 @@ def load_quant_model(state_dict_path: str):
                 print(f'"{k}" is ignored')
                 continue
             v = f.get_tensor(k)
-            state_dict[k].copy_(v.type_as(state_dict[k]).to(state_dict[k].device))
+            if state_dict[k].is_floating_point():
+                v = v.type_as(state_dict[k])
+            state_dict[k].copy_(v.to(state_dict[k].device))
             state_dict.pop(k)
 
     if len(state_dict):
@@ -55,7 +57,9 @@ def load_state_dict(model_path: str, model: ChatGLMModel = None, dtype = None):
             if k not in state_dict:
                 print(f'"{k}" is ignored')
                 continue
-            state_dict[k].copy_(v.type_as(state_dict[k]).to(state_dict[k].device))
+            if state_dict[k].is_floating_point():
+                v = v.type_as(state_dict[k])
+            state_dict[k].copy_(v.to(state_dict[k].device))
             state_dict.pop(k)
 
     if len(state_dict):

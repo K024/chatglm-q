@@ -11,7 +11,7 @@ tokenizer = ChatGLMTokenizer("../models/chatglm-6b-safe/sentencepiece.model")
 decoder = ChatGLMDecoder(model, tokenizer)
 
 # %%
-from chatglm_q.quantizer import get_quant_int8_linear, get_quant_embedding
+from chatglm_q.int8.quantizer import get_quant_int8_linear, get_quant_embedding
 
 model.word_embedding = get_quant_embedding(model.word_embedding)
 

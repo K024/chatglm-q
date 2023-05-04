@@ -27,7 +27,7 @@ model = load_state_dict("../models/chatglm-6b-safe")
 
 # %%
 from torch import nn
-from chatglm_q.quantizer import get_quant_embedding, GPTQLinearQuantizer
+from chatglm_q.int8.quantizer import get_quant_embedding, GPTQLinearQuantizer
 
 model.word_embedding = get_quant_embedding(model.word_embedding)
 

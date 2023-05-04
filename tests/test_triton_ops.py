@@ -1,7 +1,7 @@
 import torch
 import unittest
-from chatglm_q.triton_ops import dynamic_quant_matmul, dynamic_quant_matmul_transposed
-from chatglm_q.qlinear import dynamic_quant_matmul as auto_grad_dynamic_quant_matmul
+from chatglm_q.int8.triton_ops import dynamic_quant_matmul, dynamic_quant_matmul_transposed
+from chatglm_q.int8.qlinear import dynamic_quant_matmul as auto_grad_dynamic_quant_matmul
 
 
 class TritonOpsTests(unittest.TestCase):

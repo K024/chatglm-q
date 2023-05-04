@@ -27,7 +27,7 @@ model = NeuralNetwork()
 model.load_state_dict(torch.load("model.pth"))
 
 # %%
-from chatglm_q.quantizer import GPTQLinearQuantizer, get_quant_int8_linear
+from chatglm_q.int8.quantizer import GPTQLinearQuantizer, get_quant_int8_linear
 
 qlayers: dict[str, GPTQLinearQuantizer] = {}
 
