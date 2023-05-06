@@ -32,6 +32,7 @@ class ChatGLMDecoder():
         top_p = 0.8,
         temperature = 1.0,
         device = None,
+        max_sequence_length = 2048,
     ):
         self.model = model
         self.tokenizer = tokenizer
@@ -40,6 +41,7 @@ class ChatGLMDecoder():
         self.temperature = temperature
         self.device = device
         self.eos_token_id = tokenizer[eos_token]
+        self.max_sequence_length = max_sequence_length
 
     @torch.no_grad()
     def generate(self, prefix_text: str, max_generated_tokens = 200, top_k = None, top_p = None, temperature = None):
@@ -55,7 +57,9 @@ class ChatGLMDecoder():
         generated_tokens = []
         new_id_pos = 0
 
-        while len(generated_tokens) < max_generated_tokens:
+        while len(generated_tokens) < max_generated_tokens \
+            and input_ids.shape[1] < self.max_sequence_length:
+
             _, logits, past_key_values = model(
                 input_ids=input_ids[:, new_id_pos:].to(self.device),
                 input_prefix_mask=input_prefix_mask.to(self.device),

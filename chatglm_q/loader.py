@@ -8,7 +8,7 @@ from safetensors.torch import save_file, load_file, safe_open
 from .model import ChatGLMModel, ChatGLMConfig
 
 
-def create_quant_model():
+def create_quant_int8_model():
     try:
         from . import model as modeling
         from .int8.qlinear import DynamicQuantizeLinear, QEmbedding
@@ -20,9 +20,27 @@ def create_quant_model():
         modeling.Linear, modeling.Embedding = prev_linear, prev_embedding
 
 
+def create_quant_int4_model():
+    try:
+        from . import model as modeling
+        from .int4.qlinear import DynamicQuantizeLinear, QEmbedding
+        prev_linear, prev_embedding = modeling.Linear, modeling.Embedding
+        modeling.Linear, modeling.Embedding = DynamicQuantizeLinear, QEmbedding
+
+        return ChatGLMModel(ChatGLMConfig())
+    finally:
+        modeling.Linear, modeling.Embedding = prev_linear, prev_embedding
+
+
 @torch.no_grad()
-def load_quant_model(state_dict_path: str):
-    model = create_quant_model()
+def load_quant_model(state_dict_path: str, quant_type = "int8"):
+    if quant_type == "int8":
+        model = create_quant_int8_model()
+    elif quant_type == "int4":
+        model = create_quant_int4_model()
+    else:
+        raise NotImplementedError(f"No quant_type named '{quant_type}'")
+
     state_dict = dict(**model.state_dict())
 
     with safe_open(state_dict_path, framework="pt") as f:

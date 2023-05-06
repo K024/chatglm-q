@@ -11,7 +11,7 @@ tokenizer = ChatGLMTokenizer("../models/chatglm-6b-safe/sentencepiece.model")
 decoder = ChatGLMDecoder(model, tokenizer)
 
 # %%
-from chatglm_q.int8.quantizer import get_quant_int8_linear, get_quant_embedding
+from chatglm_q.int4.quantizer import get_quant_int4_linear, get_quant_embedding
 
 model.word_embedding = get_quant_embedding(model.word_embedding)
 
@@ -30,12 +30,12 @@ for name, module in tqdm(linear_layers.items()):
         module_name = name
         parent = model
 
-    module = get_quant_int8_linear(module)
+    module = get_quant_int4_linear(module)
     setattr(parent, module_name, module)
 
 # %%
 from safetensors.torch import save_file
 
-save_file(model.state_dict(), "../models/chatglm-6b-int8-naive.safetensors")
+save_file(model.state_dict(), "../models/chatglm-6b-int4g32-naive.safetensors")
 
 # %%

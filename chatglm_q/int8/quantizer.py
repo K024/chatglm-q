@@ -8,24 +8,26 @@ max_q_int8 = 2 ** (8 - 1) - 1
 assert 127 == max_q_int8
 
 
-@torch.jit.script
+@torch.no_grad()
 def quantize_int8(inputs: Tensor) -> tuple[torch.CharTensor, Tensor]:
     '''
     inputs: for weight (out_dim, in_dim), for activation (...channels, features)
     '''
     w_max, _ = torch.max(inputs.abs(), dim=1, keepdim=True)
-    scale = torch.clamp(w_max / 127, min=1e-10) # safe for float16
-    inputs = torch.clamp(torch.round(inputs / scale), -127, 127)
+    scale = torch.clamp(w_max / max_q_int8, min=1e-10) # safe for float16
+    inputs = torch.clamp(torch.round(inputs / scale), -max_q_int8, max_q_int8)
     return inputs.to(torch.int8), scale.squeeze(dim=-1)
 
 
-def clamp_to_quantize_grid(x: Tensor, scale: Tensor, max_q: int) -> Tensor:
-    q = torch.clamp(torch.round(x / scale), -max_q, max_q)
+@torch.no_grad()
+def clamp_to_quantize_grid(x: Tensor, scale: Tensor) -> Tensor:
+    q = torch.clamp(torch.round(x / scale), -max_q_int8, max_q_int8)
     return scale * q
 
 
-def quantize_with_scale(x: Tensor, scale: Tensor, max_q: int) -> Tensor:
-    return torch.clamp(torch.round(x / scale), -max_q, max_q)
+@torch.no_grad()
+def quantize_with_scale(x: Tensor, scale: Tensor) -> Tensor:
+    return torch.clamp(torch.round(x / scale), -max_q_int8, max_q_int8).to(torch.int8)
 
 
 @torch.no_grad()
@@ -126,7 +128,7 @@ class GPTQLinearQuantizer():
                 w = weight_block[:, j]
                 d = h_inv_block[j, j]
 
-                q = clamp_to_quantize_grid(w, scale, max_q_int8)
+                q = clamp_to_quantize_grid(w, scale)
 
                 quant_block[:, j] = q
                 losses_block[:, j] = (w - q) ** 2 / d ** 2
@@ -155,7 +157,7 @@ class GPTQLinearQuantizer():
         original = self.layer
         modified = DynamicQuantizeLinear(original.in_features, original.out_features, original.bias is not None)
 
-        q_weight = quantize_with_scale(grid_weight, scale[:, None], max_q_int8)
+        q_weight = quantize_with_scale(grid_weight, scale[:, None])
         modified.apply_weights_(q_weight, scale, original.bias)
 
         return modified
