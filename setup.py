@@ -15,9 +15,7 @@ setup(
     description="Another ChatGLM implementation for optimized quantization",
     url="https://github.com/K024/chatglm-q", 
 
-    packages=[
-        "chatglm_q",
-    ],
+    packages=find_packages(),
 
     test_suite="setup.my_test_suite",
 
