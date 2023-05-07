@@ -1,11 +1,12 @@
 # %%
 import json
 import torch
-from chatglm_q.tokenizer import ChatGLMTokenizer
+from chatglm_q.loader import ChatGLMLoadConfig, load_model_and_tokenizer, save_model_and_tokenizer
 
 torch.manual_seed(42)
 
-tokenizer = ChatGLMTokenizer("../models/chatglm-6b-safe/sentencepiece.model")
+_, model, tokenizer = load_model_and_tokenizer("../models/chatglm-6b-safe", torch.float32)
+
 raw_data = json.load(open("../data/zh-data01.json"))
 
 calibrate_data_size = 10
@@ -19,11 +20,6 @@ def create_input(data):
     return torch.LongTensor([input_ids]), torch.LongTensor([prefix_mask])
 
 data = [create_input(raw_data[idx]) for idx in calibrate_data]
-
-# %%
-from chatglm_q.loader import load_state_dict
-
-model = load_state_dict("../models/chatglm-6b-safe")
 
 # %%
 from torch import nn
@@ -94,13 +90,8 @@ del lm_head_q
 del current_h
 
 # %%
-from safetensors.torch import save_file
+config = ChatGLMLoadConfig(quant_type="int8")
 
-save_file(model.state_dict(), "../models/chatglm-6b-int8.safetensors")
-
-# %%
-from chatglm_q.loader import load_quant_model
-
-model = load_quant_model("../models/chatglm-6b-int8.safetensors")
+save_model_and_tokenizer("../models/chatglm-6b-int8", config, model, tokenizer)
 
 # %%

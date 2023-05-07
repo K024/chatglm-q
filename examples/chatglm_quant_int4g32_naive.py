@@ -2,13 +2,9 @@
 import torch
 from torch import nn
 from tqdm.auto import tqdm
-from chatglm_q.loader import load_state_dict
-from chatglm_q.tokenizer import ChatGLMTokenizer
-from chatglm_q.decoder import ChatGLMDecoder
+from chatglm_q.loader import ChatGLMLoadConfig, load_model_and_tokenizer, save_model_and_tokenizer
 
-model = load_state_dict("../models/chatglm-6b-safe")
-tokenizer = ChatGLMTokenizer("../models/chatglm-6b-safe/sentencepiece.model")
-decoder = ChatGLMDecoder(model, tokenizer)
+_, model, tokenizer = load_model_and_tokenizer("../models/chatglm-6b-safe", torch.float32)
 
 # %%
 from chatglm_q.int4.quantizer import get_quant_int4_linear, get_quant_embedding
@@ -34,8 +30,8 @@ for name, module in tqdm(linear_layers.items()):
     setattr(parent, module_name, module)
 
 # %%
-from safetensors.torch import save_file
+config = ChatGLMLoadConfig(quant_type="int4g32")
 
-save_file(model.state_dict(), "../models/chatglm-6b-int4g32-naive.safetensors")
+save_model_and_tokenizer("../models/chatglm-6b-int4g32-naive", config, model, tokenizer)
 
 # %%

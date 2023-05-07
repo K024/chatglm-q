@@ -2,7 +2,7 @@
 from pathlib import Path
 
 file_dir = Path(__file__).parent
-model_path = file_dir / "../models/chatglm-6b-int8.safetensors"
+model_path = file_dir / "../models/chatglm-6b-int8/"
 tokenizer_path = file_dir / "../models/chatglm-6b-safe/sentencepiece.model"
 
 export_path = file_dir / "../models/chatglm-6b-int8-onnx/chatglm-6b-int8.onnx"
@@ -11,11 +11,9 @@ export_path = str(export_path.absolute())
 
 # %%
 import torch
-from chatglm_q.loader import load_quant_model
-from chatglm_q.tokenizer import ChatGLMTokenizer
+from chatglm_q.loader import load_model_and_tokenizer
 
-model = load_quant_model(model_path)
-tokenizer = ChatGLMTokenizer(tokenizer_path)
+_, model, tokenizer = load_model_and_tokenizer(model_path)
 
 input_ids, prefix_mask = tokenizer.encode("[Round 0]\n", "问：")
 

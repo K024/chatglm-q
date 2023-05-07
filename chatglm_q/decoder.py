@@ -1,7 +1,11 @@
 import re
 import torch
+from pathlib import Path
+from typing import Union
+from huggingface_hub import snapshot_download
 from .model import ChatGLMModel
 from .tokenizer import ChatGLMTokenizer
+from .loader import ChatGLMLoadConfig, load_model_and_tokenizer, save_model_and_tokenizer
 
 
 def top_p_sampling(logits: torch.Tensor, top_k=100, top_p=0.8, temperature=1.0):
@@ -25,28 +29,39 @@ def top_p_sampling(logits: torch.Tensor, top_k=100, top_p=0.8, temperature=1.0):
 class ChatGLMDecoder():
     def __init__(
         self,
+        config: ChatGLMLoadConfig,
         model: ChatGLMModel,
         tokenizer: ChatGLMTokenizer,
         eos_token = "<eop>",
-        top_k = 50,
-        top_p = 0.8,
-        temperature = 1.0,
         device = None,
         max_sequence_length = 2048,
     ):
+        self.config = config
         self.model = model
         self.tokenizer = tokenizer
-        self.top_p = top_p
-        self.top_k = top_k
-        self.temperature = temperature
         self.device = device
         self.eos_token_id = tokenizer[eos_token]
         self.max_sequence_length = max_sequence_length
 
+
+    @staticmethod
+    def from_pretrained(path_or_repo_id: Union[Path, str], device=None, torch_dtype=None, cache_dir=None):
+        path = Path(path_or_repo_id)
+        if not path.exists() or not path.is_dir():
+            assert isinstance(path_or_repo_id, str)
+            path = snapshot_download(path_or_repo_id, cache_dir=cache_dir)
+        config, model, tokenizer = load_model_and_tokenizer(path, torch_dtype)
+        model.to(device=device)
+        return ChatGLMDecoder(config, model, tokenizer, device=device)
+
+
+    def save_pretrained(self, path: Union[Path, str], shard=True):
+        save_model_and_tokenizer(path, self.config, self.model, self.tokenizer, shard=shard)
+
+
     @torch.no_grad()
-    def generate(self, prefix_text: str, max_generated_tokens = 200, top_k = None, top_p = None, temperature = None):
+    def generate(self, prefix_text: str, max_generated_tokens=200, top_k=100, top_p=0.8, temperature=1.0):
         model, tokenizer = self.model, self.tokenizer
-        top_k, top_p, temperature = top_k or self.top_k, top_p or self.top_p, temperature or self.temperature
         eos_token_id = self.eos_token_id
 
         input_ids, input_prefix_mask = tokenizer.encode(prefix_text)

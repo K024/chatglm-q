@@ -8,15 +8,15 @@ from dataclasses import dataclass
 
 @dataclass
 class ChatGLMConfig():
-    hidden_size = 4096
-    inner_hidden_size = 16384
-    layernorm_epsilon = 1e-05
-    max_sequence_length = 2048
-    num_attention_heads = 32
-    num_layers = 28
-    vocab_size = 130528
-    position_encoding_2d = True
-    dropout_rate = 0.0
+    hidden_size: int = 4096
+    inner_hidden_size: int = 16384
+    layernorm_epsilon: float = 1e-05
+    max_sequence_length: int = 2048
+    num_attention_heads: int = 32
+    num_layers: int = 28
+    vocab_size: int = 130528
+    position_encoding_2d: bool = True
+    dropout_rate: float = 0.0
 
 
 # not used

@@ -1,8 +1,6 @@
 import torch
 import streamlit as st
 from streamlit_chat import message
-from chatglm_q.loader import load_state_dict, load_quant_model
-from chatglm_q.tokenizer import ChatGLMTokenizer
 from chatglm_q.decoder import ChatGLMDecoder, chat_template
 
 
@@ -10,12 +8,8 @@ from chatglm_q.decoder import ChatGLMDecoder, chat_template
 
 @st.cache_resource
 def create_model():
-    # model = load_state_dict("../models/chatglm-6b-safe", dtype=torch.half)
-    model = load_quant_model("../models/chatglm-6b-int8.safetensors")
-    tokenizer = ChatGLMTokenizer("../models/chatglm-6b-safe/sentencepiece.model")
     device = torch.device("cuda")
-    model = model.to(device)
-    decoder = ChatGLMDecoder(model, tokenizer, device=device)
+    decoder = ChatGLMDecoder.from_pretrained("../models/chatglm-6b-int4g32", device)
     return decoder
 
 with st.spinner("加载模型中..."):
