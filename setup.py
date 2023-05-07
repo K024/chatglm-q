@@ -12,7 +12,7 @@ setup(
     name="chatglm-q",
     version="0.0.1-alpha0",
     author="K024",
-    description="ChatGLM optimized for quantization and ONNX export",
+    description="Another ChatGLM implementation for optimized quantization",
     url="https://github.com/K024/chatglm-q", 
 
     packages=[
