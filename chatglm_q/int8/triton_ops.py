@@ -96,9 +96,9 @@ def dynamic_quant_matmul(a: Tensor, b: Tensor, b_scale: Tensor, allow_tf32: bool
     assert b.shape[1] == b_scale.shape[0]
     assert b.dtype == torch.int8
     assert a.dtype == b_scale.dtype
-    assert a.device.type == "cuda"
-    assert b.device.type == "cuda"
-    assert b_scale.device.type == "cuda"
+    assert a.get_device() >= 0
+    assert b.get_device() == a.get_device(), f"{b.device=}, {a.device=}"
+    assert b_scale.get_device() == a.get_device(), f"{b_scale.device=}, {a.device=}"
     # handle non-contiguous inputs if necessary
     if a.stride(0) > 1 and a.stride(1) > 1:
         a = a.contiguous()
@@ -213,9 +213,9 @@ def dynamic_quant_matmul_transposed(a: Tensor, b_T: Tensor, b_scale: Tensor, all
     assert b_T.shape[1] == b_scale.shape[0]
     assert b_T.dtype == torch.int8
     assert a.dtype == b_scale.dtype
-    assert a.device.type == "cuda"
-    assert b_T.device.type == "cuda"
-    assert b_scale.device.type == "cuda"
+    assert a.get_device() >= 0
+    assert b_T.get_device() == a.get_device(), f"{b_T.device=}, {a.device=}"
+    assert b_scale.get_device() == a.get_device(), f"{b_scale.device=}, {a.device=}"
     # handle non-contiguous inputs if necessary
     if a.stride(0) > 1 and a.stride(1) > 1:
         a = a.contiguous()

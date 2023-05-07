@@ -44,7 +44,7 @@ class DynamicQuantizeMatMul(torch.autograd.Function):
     def forward(ctx: FunctionCtx, A: Tensor, B: Tensor, b_scale: Tensor):
         # 'A' must be saved to get grad
         ctx.save_for_backward(A, B, b_scale)
-        if A.device.type == "cuda" and _dynamic_quant_matmul_impl is not None:
+        if A.get_device() >= 0 and _dynamic_quant_matmul_impl is not None:
             out = _dynamic_quant_matmul_impl(A, B, b_scale)
         elif DynamicQuantizeMatMul.THROW_IF_NOT_USING_TRITON_OPS:
             raise NotImplementedError()
@@ -58,7 +58,7 @@ class DynamicQuantizeMatMul(torch.autograd.Function):
 
         grad_A = None
         if ctx.needs_input_grad[0]:
-            if A.device.type == "cuda" and _dynamic_quant_matmul_transposed_impl is not None:
+            if A.get_device() >= 0 and _dynamic_quant_matmul_transposed_impl is not None:
                 grad_A = _dynamic_quant_matmul_transposed_impl(grad_out, B, b_scale)
             elif DynamicQuantizeMatMul.THROW_IF_NOT_USING_TRITON_OPS:
                 raise NotImplementedError()
