@@ -9,7 +9,7 @@ from chatglm_q.decoder import ChatGLMDecoder, chat_template
 @st.cache_resource
 def create_model():
     device = torch.device("cuda")
-    decoder = ChatGLMDecoder.from_pretrained("../models/chatglm-6b-int4g32", device)
+    decoder = ChatGLMDecoder.from_pretrained("K024/chatglm-6b-int4g32", device)
     return decoder
 
 with st.spinner("加载模型中..."):

@@ -45,11 +45,11 @@ class ChatGLMDecoder():
 
 
     @staticmethod
-    def from_pretrained(path_or_repo_id: Union[Path, str], device=None, torch_dtype=None, cache_dir=None):
+    def from_pretrained(path_or_repo_id: Union[Path, str], device=None, torch_dtype=None, cache_dir=None, token=None):
         path = Path(path_or_repo_id)
         if not path.exists() or not path.is_dir():
             assert isinstance(path_or_repo_id, str)
-            path = snapshot_download(path_or_repo_id, cache_dir=cache_dir)
+            path = snapshot_download(path_or_repo_id, cache_dir=cache_dir, token=token)
         config, model, tokenizer = load_model_and_tokenizer(path, torch_dtype)
         model.to(device=device)
         return ChatGLMDecoder(config, model, tokenizer, device=device)
