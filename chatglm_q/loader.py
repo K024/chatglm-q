@@ -45,14 +45,18 @@ def load_quant_model(state_dict_path: str, quant_type = "int8"):
 
     with safe_open(state_dict_path, framework="pt") as f:
         for k in f.keys():
-            if k not in state_dict:
-                print(f'"{k}" is ignored')
-                continue
-            v = f.get_tensor(k)
-            if state_dict[k].is_floating_point():
-                v = v.type_as(state_dict[k])
-            state_dict[k].copy_(v.to(state_dict[k].device))
-            state_dict.pop(k)
+            try:
+                if k not in state_dict:
+                    print(f'"{k}" is ignored')
+                    continue
+                v = f.get_tensor(k)
+                if state_dict[k].is_floating_point():
+                    v = v.type_as(state_dict[k])
+                state_dict[k].copy_(v.to(state_dict[k].device))
+                state_dict.pop(k)
+            except:
+                print(f"error handling weight '{k}'")
+                raise
 
     if len(state_dict):
         print(f'model weights "{", ".join(state_dict.keys())}" are not initialized')

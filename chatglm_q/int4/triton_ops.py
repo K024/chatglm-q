@@ -7,10 +7,14 @@ import triton.language as tl
 # from triton.ops.matmul_perf_model import early_config_prune, estimate_matmul_time
 
 
+def is_power_of_two(n: int):
+    return (n & (n-1) == 0) and n != 0
+
+
 @triton.autotune(
     configs=[
         # multiple configs not working for triton==2.0.0.post1
-        triton.Config({'BLOCK_M': 32, 'BLOCK_N': 64, 'BLOCK_K': 32, 'GROUP_M': 8}, num_stages=2, num_warps=8),
+        triton.Config({'BLOCK_M': 32, 'BLOCK_N': 64, 'GROUP_M': 8}, num_stages=2, num_warps=8),
     ],
     key=['M', 'N', 'K'],
 )
@@ -110,7 +114,9 @@ def dynamic_quant_matmul_s4(a: Tensor, b: Tensor, b_scale: Tensor, allow_tf32: b
     M, K = a.shape
     G, N = b_scale.shape
     GROUP_K = K // G
-    assert GROUP_K % 32 == 0
+    BLOCK_K = min(64, GROUP_K)
+    assert is_power_of_two(BLOCK_K)
+    assert is_power_of_two(GROUP_K)
     c = torch.empty((M, N), device=a.device, dtype=a.dtype)
     # launch kernel
     if allow_tf32 is None:
@@ -122,7 +128,7 @@ def dynamic_quant_matmul_s4(a: Tensor, b: Tensor, b_scale: Tensor, allow_tf32: b
         b.stride(0), b.stride(1),
         b_scale.stride(0), b_scale.stride(1),
         c.stride(0), c.stride(1),
-        GROUP_K=GROUP_K,
+        BLOCK_K=BLOCK_K, GROUP_K=GROUP_K,
         allow_tf32=allow_tf32,
     )
     return c.reshape(output_shape)
@@ -131,7 +137,7 @@ def dynamic_quant_matmul_s4(a: Tensor, b: Tensor, b_scale: Tensor, allow_tf32: b
 @triton.autotune(
     configs=[
         # multiple configs not working for triton==2.0.0.post1
-        triton.Config({'BLOCK_M': 32, 'BLOCK_N': 32, 'BLOCK_K': 64, 'GROUP_M': 8}, num_stages=2, num_warps=8),
+        triton.Config({'BLOCK_M': 32, 'BLOCK_K': 64, 'GROUP_M': 8}, num_stages=2, num_warps=8),
     ],
     key=['M', 'N', 'K'],
 )
@@ -231,7 +237,10 @@ def dynamic_quant_matmul_transposed_s4(a: Tensor, b: Tensor, b_scale: Tensor, al
     G, _ = b_scale.shape
     N = b.shape[0] * 2
     GROUP_N = N // G
-    assert GROUP_N % 32 == 0
+    BLOCK_N = min(64, GROUP_N)
+    assert is_power_of_two(K)
+    assert is_power_of_two(BLOCK_N)
+    assert is_power_of_two(GROUP_N)
     c = torch.empty((M, N), device=a.device, dtype=a.dtype)
     # launch kernel
     if allow_tf32 is None:
@@ -243,7 +252,7 @@ def dynamic_quant_matmul_transposed_s4(a: Tensor, b: Tensor, b_scale: Tensor, al
         b.stride(0), b.stride(1),
         b_scale.stride(0), b_scale.stride(1),
         c.stride(0), c.stride(1),
-        GROUP_N=GROUP_N,
+        BLOCK_N=BLOCK_N, GROUP_N=GROUP_N,
         allow_tf32=allow_tf32,
     )
     return c.reshape(output_shape)

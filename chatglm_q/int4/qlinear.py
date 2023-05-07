@@ -21,7 +21,7 @@ def unpack_int4(x: torch.Tensor, x_scale: torch.Tensor):
     K = x.shape[0] * 2
     G, N = x_scale.shape
     assert x.shape[1] == N
-    assert K % G == 0
+    assert K % G == 0, f"{K=}, {G=}"
     GROUP_K = K // G
     # unpack
     shifts = torch.tensor([[0], [4]]).type_as(x).repeat((K // 2, 1))
@@ -81,8 +81,7 @@ class DynamicQuantizeLinear(nn.Module):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
-        assert in_features % group_size == 0
-        assert group_size % 32 == 0
+        assert in_features % group_size == 0, f"{in_features=}, {group_size=}"
         self.group_size = group_size
         self.groups = in_features // group_size
         self.register_buffer("weight", torch.empty((in_features//2, out_features), device=device, dtype=torch.uint8))
@@ -118,8 +117,7 @@ class QEmbedding(nn.Module):
         super().__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
-        assert num_embeddings % group_size == 0
-        assert group_size % 32 == 0
+        assert num_embeddings % group_size == 0, f"{num_embeddings=}, {group_size=}"
         self.group_size = group_size
         self.groups = num_embeddings // group_size
         self.register_buffer("weight", torch.empty((num_embeddings//2, embedding_dim), device=device, dtype=torch.uint8))
