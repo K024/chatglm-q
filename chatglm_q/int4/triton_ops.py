@@ -7,6 +7,10 @@ import triton.language as tl
 # from triton.ops.matmul_perf_model import early_config_prune, estimate_matmul_time
 
 
+def check_input(a: torch.Tensor):
+    return a.get_device() >= 0
+
+
 def is_power_of_two(n: int):
     return (n & (n-1) == 0) and n != 0
 
@@ -122,16 +126,17 @@ def dynamic_quant_matmul_s4(a: Tensor, b: Tensor, b_scale: Tensor, allow_tf32: b
     if allow_tf32 is None:
         allow_tf32 = bool(torch.backends.cudnn.allow_tf32)
     grid = lambda META: (triton.cdiv(M, META['BLOCK_M']) * triton.cdiv(N, META['BLOCK_N']), )
-    _dynamic_quant_matmul_s4_kernel[grid](
-        a, b, b_scale, c, M, N, K,
-        a.stride(0), a.stride(1),
-        b.stride(0), b.stride(1),
-        b_scale.stride(0), b_scale.stride(1),
-        c.stride(0), c.stride(1),
-        BLOCK_K=BLOCK_K, GROUP_K=GROUP_K,
-        allow_tf32=allow_tf32,
-    )
-    return c.reshape(output_shape)
+    with torch.cuda.device(a.device):
+        _dynamic_quant_matmul_s4_kernel[grid](
+            a, b, b_scale, c, M, N, K,
+            a.stride(0), a.stride(1),
+            b.stride(0), b.stride(1),
+            b_scale.stride(0), b_scale.stride(1),
+            c.stride(0), c.stride(1),
+            BLOCK_K=BLOCK_K, GROUP_K=GROUP_K,
+            allow_tf32=allow_tf32,
+        )
+        return c.reshape(output_shape)
 
 
 @triton.autotune(
@@ -246,13 +251,14 @@ def dynamic_quant_matmul_transposed_s4(a: Tensor, b: Tensor, b_scale: Tensor, al
     if allow_tf32 is None:
         allow_tf32 = bool(torch.backends.cudnn.allow_tf32)
     grid = lambda META: (triton.cdiv(M, META['BLOCK_M']) * triton.cdiv(N, META['BLOCK_N']), )
-    _dynamic_quant_matmul_transposed_s4_kernel[grid](
-        a, b, b_scale, c, M, N, K,
-        a.stride(0), a.stride(1),
-        b.stride(0), b.stride(1),
-        b_scale.stride(0), b_scale.stride(1),
-        c.stride(0), c.stride(1),
-        BLOCK_N=BLOCK_N, GROUP_N=GROUP_N,
-        allow_tf32=allow_tf32,
-    )
-    return c.reshape(output_shape)
+    with torch.cuda.device(a.device):
+        _dynamic_quant_matmul_transposed_s4_kernel[grid](
+            a, b, b_scale, c, M, N, K,
+            a.stride(0), a.stride(1),
+            b.stride(0), b.stride(1),
+            b_scale.stride(0), b_scale.stride(1),
+            c.stride(0), c.stride(1),
+            BLOCK_N=BLOCK_N, GROUP_N=GROUP_N,
+            allow_tf32=allow_tf32,
+        )
+        return c.reshape(output_shape)

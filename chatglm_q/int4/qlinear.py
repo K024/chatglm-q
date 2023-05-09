@@ -6,13 +6,15 @@ DEFAULT_GROUP_SIZE = 32
 
 try:
     from .triton_ops import (
+        check_input,
         dynamic_quant_matmul_s4 as _dynamic_quant_matmul_impl,
         dynamic_quant_matmul_transposed_s4 as _dynamic_quant_matmul_transposed_impl,
     )
+    KERNEL_IMPL = "triton"
 except ImportError as e:
     print("Import triton ops failed. Using slower torch fallback.")
-    _dynamic_quant_matmul_impl = None
-    _dynamic_quant_matmul_transposed_impl = None
+    check_input = None
+    KERNEL_IMPL = "none"
 
 
 @torch.no_grad()
@@ -38,16 +40,12 @@ class DynamicQuantizeMatMul(torch.autograd.Function):
     b_scale: tensor(float) g × n
     '''
 
-    THROW_IF_NOT_USING_TRITON_OPS = False
-
     @staticmethod
     def forward(ctx: FunctionCtx, A: Tensor, B: Tensor, b_scale: Tensor):
         # 'A' must be saved to get grad
         ctx.save_for_backward(A, B, b_scale)
-        if A.get_device() >= 0 and _dynamic_quant_matmul_impl is not None:
+        if check_input and check_input(A):
             out = _dynamic_quant_matmul_impl(A, B, b_scale)
-        elif DynamicQuantizeMatMul.THROW_IF_NOT_USING_TRITON_OPS:
-            raise NotImplementedError()
         else:
             out = A.matmul(unpack_int4(B, b_scale))
         return out
@@ -58,10 +56,8 @@ class DynamicQuantizeMatMul(torch.autograd.Function):
 
         grad_A = None
         if ctx.needs_input_grad[0]:
-            if A.get_device() >= 0 and _dynamic_quant_matmul_transposed_impl is not None:
+            if check_input and check_input(A):
                 grad_A = _dynamic_quant_matmul_transposed_impl(grad_out, B, b_scale)
-            elif DynamicQuantizeMatMul.THROW_IF_NOT_USING_TRITON_OPS:
-                raise NotImplementedError()
             else:
                 grad_A = grad_out.matmul(unpack_int4(B, b_scale).t())
 
@@ -126,9 +122,9 @@ class QEmbedding(nn.Module):
     def forward(self, input: Tensor):
         group_idx = input // self.group_size
         embed_idx = input // 2
-        shifts = ((input % 2) * 4)[..., None]
         scales = nn.functional.embedding(group_idx, self.weight_scale)
         embeddings = nn.functional.embedding(embed_idx, self.weight)
+        shifts = ((input % 2) * 4)[..., None].type_as(embeddings)
         embeddings = ((embeddings >> shifts) & 0xF).to(torch.int8)
         embeddings = (embeddings - 0x8) * scales
         return embeddings

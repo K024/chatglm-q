@@ -3,9 +3,8 @@ import torch
 import unittest
 from chatglm_q.int4.triton_ops import dynamic_quant_matmul_s4, dynamic_quant_matmul_transposed_s4
 from chatglm_q.int4.quantizer import quantize_int4
-from chatglm_q.int4.qlinear import DynamicQuantizeMatMul, unpack_int4, dynamic_quant_matmul as auto_grad_dynamic_quant_matmul
+from chatglm_q.int4.qlinear import unpack_int4, dynamic_quant_matmul as auto_grad_dynamic_quant_matmul
 
-DynamicQuantizeMatMul.THROW_IF_NOT_USING_TRITON_OPS = True
 
 class TritonOpsTests(unittest.TestCase):
 

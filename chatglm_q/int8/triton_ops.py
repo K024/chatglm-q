@@ -6,6 +6,10 @@ import triton.language as tl
 # from triton.ops.matmul_perf_model import early_config_prune, estimate_matmul_time
 
 
+def check_input(a: torch.Tensor):
+    return a.get_device() >= 0
+
+
 @triton.autotune(
     configs=[
         # multiple configs not working for triton==2.0.0.post1
@@ -112,14 +116,15 @@ def dynamic_quant_matmul(a: Tensor, b: Tensor, b_scale: Tensor, allow_tf32: bool
     if allow_tf32 is None:
         allow_tf32 = bool(torch.backends.cudnn.allow_tf32)
     grid = lambda META: (triton.cdiv(M, META['BLOCK_M']) * triton.cdiv(N, META['BLOCK_N']), META['SPLIT_K'])
-    _dynamic_quant_matmul_kernel[grid](
-        a, b, b_scale, c, M, N, K,
-        a.stride(0), a.stride(1),
-        b.stride(0), b.stride(1), b_scale.stride(0),
-        c.stride(0), c.stride(1),
-        allow_tf32=allow_tf32,
-    )
-    return c.reshape(output_shape)
+    with torch.cuda.device(a.device):
+        _dynamic_quant_matmul_kernel[grid](
+            a, b, b_scale, c, M, N, K,
+            a.stride(0), a.stride(1),
+            b.stride(0), b.stride(1), b_scale.stride(0),
+            c.stride(0), c.stride(1),
+            allow_tf32=allow_tf32,
+        )
+        return c.reshape(output_shape)
 
 
 @triton.autotune(
@@ -229,11 +234,12 @@ def dynamic_quant_matmul_transposed(a: Tensor, b_T: Tensor, b_scale: Tensor, all
     if allow_tf32 is None:
         allow_tf32 = bool(torch.backends.cudnn.allow_tf32)
     grid = lambda META: (triton.cdiv(M, META['BLOCK_M']) * triton.cdiv(N, META['BLOCK_N']), META['SPLIT_K'])
-    _dynamic_quant_matmul_transposed_kernel[grid](
-        a, b_T, b_scale, c, M, N, K,
-        a.stride(0), a.stride(1),
-        b_T.stride(0), b_T.stride(1), b_scale.stride(0),
-        c.stride(0), c.stride(1),
-        allow_tf32=allow_tf32,
-    )
-    return c.reshape(output_shape)
+    with torch.cuda.device(a.device):
+        _dynamic_quant_matmul_transposed_kernel[grid](
+            a, b_T, b_scale, c, M, N, K,
+            a.stride(0), a.stride(1),
+            b_T.stride(0), b_T.stride(1), b_scale.stride(0),
+            c.stride(0), c.stride(1),
+            allow_tf32=allow_tf32,
+        )
+        return c.reshape(output_shape)
