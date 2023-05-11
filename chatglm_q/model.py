@@ -159,13 +159,13 @@ class GLMAttention(nn.Module):
 
         k, v, kv_cache = merge_kv_cache(k, v, kv_cache, use_past)
 
-        scaling_coeff = float(self.layer_idx + 1)
-        d_head = q.shape[-1]
-        q = q / (math.sqrt(d_head) * scaling_coeff)
-
         q = q.permute(0, 2, 1, 3)
         k = k.permute(0, 2, 3, 1)
         v = v.permute(0, 2, 1, 3)
+
+        scaling_coeff = float(self.layer_idx + 1)
+        d_head = q.shape[-1]
+        q = q / (math.sqrt(d_head) * scaling_coeff)
 
         # (n_batch, n_heads, n_new, n_seq)
         qk = torch.matmul(q, k) # / math.sqrt(d_head) # no need to scale again

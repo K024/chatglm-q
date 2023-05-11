@@ -55,6 +55,7 @@ class ChatGLMTokenizer:
             prefix_mask += [1, 0]
 
         if text_pair is not None:
+            text_pair = self.preprocess(text_pair, linebreak, whitespaces)
             pair_tokens = self.text_tokenizer.encode(text_pair)
             tokens += pair_tokens
             prefix_mask += [0] * len(pair_tokens)
