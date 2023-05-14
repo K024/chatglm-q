@@ -28,6 +28,7 @@ import torch
 from chatglm_q.decoder import ChatGLMDecoder, chat_template
 
 device = torch.device("cuda")
+# optionally pass a `torch_dtype=torch.float16` to set the activation dtype
 decoder = ChatGLMDecoder.from_pretrained("K024/chatglm-6b-int4g32", device=device)
 
 prompt = chat_template([], "我是谁？")
@@ -45,11 +46,11 @@ streamlit run web-ui.py
 
 ## Avaiable models
 
-| Type      | Huggingface Hub                                                               |      |
-| :-------- | :---------------------------------------------------------------------------- | :--- |
-| int8      | [K024/chatglm-6b-int8](https://huggingface.co/K024/chatglm-6b-int8)           |      |
-| int4g32   | [K024/chatglm-6b-int4g32](https://huggingface.co/K024/chatglm-6b-int4g32)     |      |
-| onnx-u8s8 | [K024/ChatGLM-6b-onnx-u8s8](https://huggingface.co/K024/ChatGLM-6b-onnx-u8s8) |      |
+| Type      | Huggingface Hub                                                               | Recommended For                               |
+| :-------- | :---------------------------------------------------------------------------- | :-------------------------------------------- |
+| int8      | [K024/chatglm-6b-int8](https://huggingface.co/K024/chatglm-6b-int8)           | Linux/WSL2 CUDA 9G+ VRAM                      |
+| int4g32   | [K024/chatglm-6b-int4g32](https://huggingface.co/K024/chatglm-6b-int4g32)     | Linux/WSL2 CUDA 6G+ VRAM                      |
+| onnx-u8s8 | [K024/ChatGLM-6b-onnx-u8s8](https://huggingface.co/K024/ChatGLM-6b-onnx-u8s8) | x86-64 with AVX2/AVX512 / ARM64 (Apple M1/M2) |
 
 The model weights are released under the same license as ChatGLM-6b, see [MODEL LICENSE](https://huggingface.co/THUDM/chatglm-6b/blob/main/MODEL_LICENSE).
 

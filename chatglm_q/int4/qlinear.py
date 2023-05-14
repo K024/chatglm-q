@@ -26,8 +26,8 @@ def unpack_int4(x: torch.Tensor, x_scale: torch.Tensor):
     assert K % G == 0, f"{K=}, {G=}"
     GROUP_K = K // G
     # unpack
-    shifts = torch.tensor([[0], [4]]).type_as(x).repeat((K // 2, 1))
-    x = x.reshape((K // 2, 1, N)).repeat((1, 2, 1)).reshape((K, N))
+    shifts = torch.tensor([0, 4]).reshape((1, 2, 1)).type_as(x)
+    x = x.reshape((K // 2, 1, N)).repeat((1, 2, 1))
     x = ((x >> shifts) & 0xF).to(torch.int8) - 0x8
     x = x.reshape((G, GROUP_K, N)) * x_scale[:, None, :]
     return x.reshape((K, N))
