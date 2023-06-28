@@ -181,6 +181,7 @@ def convert_transformers_weights(model_path, target_path):
         new_state_dict = OrderedDict()
         for k, v in state_dict.items():
             if k not in name_mapping:
+                print(f"Unused weight '{k}'")
                 continue
             new_state_dict[name_mapping[k]] = v
 
