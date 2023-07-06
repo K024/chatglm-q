@@ -2,74 +2,46 @@ import re
 from sentencepiece import SentencePieceProcessor
 
 
-def replace_spaces_with_blank(match: re.Match[str]):
-    return f"<|blank_{len(match.group())}|>"
-
-
-def replace_blank_with_spaces(match: re.Match[str]):
-    return " " * int(match.group(1))
-
-
-class ChatGLMTokenizer:
+class ChatGLM2Tokenizer:
     def __init__(self, vocab_file):
         assert vocab_file is not None
         self.vocab_file = vocab_file
-        self.special_tokens = ["[MASK]", "[gMASK]", "[sMASK]", "<unused_0>", "<sop>", "<eop>", "<ENC>", "<dBLOCK>"]
+        self.special_tokens = ["[MASK]", "[gMASK]", "[sMASK]", "<sop>", "<eop>"]
         self.text_tokenizer = SentencePieceProcessor(str(vocab_file))
+        self.vocab_size = len(self.text_tokenizer) + len(self.special_tokens)
+        self.true_vocab_size = len(self.text_tokenizer)
 
     def __len__(self):
-        return len(self.text_tokenizer)
+        return self.vocab_size
 
     def __getitem__(self, key: str):
+        if key in self.special_tokens:
+            return len(self.text_tokenizer) + self.special_tokens.index(key)
         return self.text_tokenizer[key]
 
-    def preprocess(self, text: str, linebreak=True, whitespaces=True):
-        if linebreak:
-            text = text.replace("\n", "<n>")
-        if whitespaces:
-            text = text.replace("\t", "<|tab|>")
-            text = re.sub(r" {2,80}", replace_spaces_with_blank, text)
-        return text
-
     def encode(
-        self, text: str, text_pair: str = None,
-        linebreak=True, whitespaces=True,
-        add_dummy_prefix=True, special_tokens=True,
-    ) -> tuple[list[int], list[int]]:
+        self, text: str, text_pair: str = None, add_special_tokens=True,
+    ) -> list[int]:
         """
-        text: Text to encode. Bidirectional part with a [gMASK] and an <sop> for causal LM.
-        text_pair: causal LM part.
-        linebreak: Whether to encode newline (\n) in text.
-        whitespaces: Whether to encode multiple whitespaces or tab in text, useful for source code encoding.
-        special_tokens: Whether to encode special token ([MASK], [gMASK], etc.) in text.
-        add_dummy_prefix: Whether to add dummy blank space in the beginning.
+        text: Text to encode.
+        text_pair: Expected answer to encode.
+        add_special_tokens: Add "[gMASK]" "<sop>" before `text` and "</s>" after `text_pair`
         """
-        text = self.preprocess(text, linebreak, whitespaces)
-        if not add_dummy_prefix:
-            text = "<n>" + text
-
         tokens = self.text_tokenizer.encode(text)
-        prefix_mask = [1] * len(tokens)
-        if special_tokens:
-            tokens += [self.text_tokenizer["[gMASK]"], self.text_tokenizer["<sop>"]]
-            prefix_mask += [1, 0]
+        if add_special_tokens:
+            tokens = [self["[gMASK]"], self["<sop>"]] + tokens
 
         if text_pair is not None:
-            text_pair = self.preprocess(text_pair, linebreak, whitespaces)
             pair_tokens = self.text_tokenizer.encode(text_pair)
             tokens += pair_tokens
-            prefix_mask += [0] * len(pair_tokens)
-            if special_tokens:
-                tokens += [self.text_tokenizer["<eop>"]]
-                prefix_mask += [0]
+            if add_special_tokens:
+                tokens += [self["</s>"]]
 
-        return (tokens if add_dummy_prefix else tokens[2:]), prefix_mask
+        return tokens
 
     def decode(self, text_ids: list[int]) -> str:
+        text_ids = list(filter(lambda x: x < self.true_vocab_size, text_ids))
         text = self.text_tokenizer.decode(text_ids)
-        text = text.replace("<n>", "\n")
-        text = text.replace("<|tab|>", "\t")
-        text = re.sub(r"<\|blank_(\d\d?)\|>", replace_blank_with_spaces, text)
         return text
 
     # TODO: __call__
