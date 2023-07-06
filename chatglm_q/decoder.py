@@ -3,8 +3,8 @@ import torch
 from pathlib import Path
 from typing import Union
 from huggingface_hub import snapshot_download
-from .model import ChatGLMModel
-from .tokenizer import ChatGLMTokenizer
+from .model import ChatGLM2Model
+from .tokenizer import ChatGLM2Tokenizer
 from .loader import ChatGLMLoadConfig, load_model_and_tokenizer, save_model_and_tokenizer
 
 
@@ -30,18 +30,18 @@ class ChatGLMDecoder():
     def __init__(
         self,
         config: ChatGLMLoadConfig,
-        model: ChatGLMModel,
-        tokenizer: ChatGLMTokenizer,
-        eos_token = "<eop>",
+        model: ChatGLM2Model,
+        tokenizer: ChatGLM2Tokenizer,
+        eos_token = "</s>",
         device = None,
-        max_sequence_length = 2048,
+        max_sequence_length: int = None,
     ):
         self.config = config
         self.model = model
         self.tokenizer = tokenizer
         self.device = device
         self.eos_token_id = tokenizer[eos_token]
-        self.max_sequence_length = max_sequence_length
+        self.max_sequence_length = max_sequence_length or config.model_config.max_sequence_length
 
 
     @staticmethod
@@ -60,26 +60,23 @@ class ChatGLMDecoder():
 
 
     @torch.no_grad()
-    def generate(self, prefix_text: str, max_generated_tokens=200, top_k=100, top_p=0.8, temperature=1.0):
+    def generate(self, prefix_text: str, max_generated_tokens=400, top_k=100, top_p=0.8, temperature=1.0):
         model, tokenizer = self.model, self.tokenizer
         eos_token_id = self.eos_token_id
 
-        input_ids, input_prefix_mask = tokenizer.encode(prefix_text)
+        input_ids = tokenizer.encode(prefix_text)
         input_ids = torch.LongTensor([input_ids])
-        input_prefix_mask = torch.LongTensor([input_prefix_mask])
         past_key_values = None
 
         generated_tokens = []
-        new_id_pos = 0
 
         while len(generated_tokens) < max_generated_tokens \
             and input_ids.shape[1] < self.max_sequence_length:
 
             _, logits, past_key_values = model(
-                input_ids=input_ids[:, new_id_pos:].to(self.device),
-                input_prefix_mask=input_prefix_mask.to(self.device),
-                predict_one_token=True,
+                input_ids=input_ids.to(self.device),
                 past_key_values=past_key_values,
+                predict_last_one_token=True,
             )
 
             next_token = top_p_sampling(logits[0, -1], top_k, top_p, temperature).to("cpu").item()
@@ -88,18 +85,14 @@ class ChatGLMDecoder():
             if next_token == eos_token_id:
                 break
 
-            new_id_pos = input_prefix_mask.shape[1]
+            response_text = process_response(tokenizer.decode(generated_tokens))
+            if response_text and response_text[-1] != "�":
+                yield response_text
 
             input_ids = torch.cat([
                 input_ids,
                 torch.tensor([[next_token]]).long(),
             ], dim=1)
-            input_prefix_mask = torch.cat([
-                input_prefix_mask,
-                torch.zeros((input_prefix_mask.shape[0], 1)).long(),
-            ], dim=1)
-
-            yield process_response(tokenizer.decode(generated_tokens))
 
         return process_response(tokenizer.decode(generated_tokens))
 

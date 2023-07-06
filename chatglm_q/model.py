@@ -271,6 +271,7 @@ class ChatGLM2Model(nn.Module):
 
         # half of head_dim bypassed
         d_freqs_cis = config.head_hidden_size // 2
+        self.d_freqs_cis = d_freqs_cis
         freqs_cis_cache = precompute_freqs_cis(d_freqs_cis, config.max_sequence_length) \
             .view(config.max_sequence_length, -1).to(dtype=dtype)
         self.register_buffer("freqs_cis_cache", freqs_cis_cache, persistent=False)
@@ -334,7 +335,7 @@ class ChatGLM2Model(nn.Module):
             input_embeddings = self.word_embedding(input_ids)
 
         freqs_cis = F.embedding(position_ids, self.freqs_cis_cache) \
-            .view(n_batch, n_seq, 1, 1, -1, 2)
+            .view(n_batch, -1, 1, 1, self.d_freqs_cis // 2, 2)
 
         # forward layers
         h = self.dropout(input_embeddings)
