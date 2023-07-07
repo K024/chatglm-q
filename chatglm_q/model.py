@@ -33,25 +33,33 @@ def precompute_sinusoids(dim: int, length: int, scale = 10000.0):
 
 # changed from v1: [r, r, ..., i, i, ...] => [[r, i], [r, i], ...]
 def precompute_freqs_cis(dim: int, length: int, theta = 10000.0):
-    assert dim % 2 == 0
+    assert dim % 4 == 0
+    # half of the head_dim bypassed
+    dim = dim // 2
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2).float() / dim))
     freqs = torch.outer(torch.arange(length).float(), freqs)
-    return torch.stack([torch.cos(freqs), torch.sin(freqs)], dim=-1)
+    freqs_cis = torch.stack([torch.cos(freqs), torch.sin(freqs)], dim=-1)
+    freqs_bypass = torch.stack([torch.ones_like(freqs), torch.zeros_like(freqs)], dim=-1)
+    return torch.cat([freqs_cis, freqs_bypass], dim=-2)
 
 
-# changed from v1: ??? what ??? why ???
+# changed from v1
+ROTARY_VIEW_AS_COMPLEX = True
 def apply_rotary_emb(
     x: Tensor,          # (n_batch, n_seq, n_groups, n_head, d_head)
-    freqs_cis: Tensor,  # (n_batch, n_seq, 1, 1, d_head // 4, 2)
+    freqs_cis: Tensor,  # (n_batch, n_seq, 1, 1, d_head // 2, 2)
     shape: list[int],
 ) -> Tensor:
     *shape_prefix, d_head = shape
-    x_rot, x_bypass = torch.split(x, d_head // 2, dim=-1)
-    x_rot = x_rot.view(*shape_prefix, d_head // 4, 2)
-    o_r = x_rot[..., 0] * freqs_cis[..., 0] - x_rot[..., 1] * freqs_cis[..., 1]
-    o_i = x_rot[..., 0] * freqs_cis[..., 1] + x_rot[..., 1] * freqs_cis[..., 0]
-    o = torch.stack([o_r, o_i], dim=-1).view(*shape_prefix, d_head // 2)
-    return torch.cat([o, x_bypass], dim=-1)
+    x = x.view(*shape_prefix, d_head // 2, 2)
+    if ROTARY_VIEW_AS_COMPLEX:
+        x = torch.view_as_complex(x)
+        freqs_cis = torch.view_as_complex(freqs_cis)
+        return torch.view_as_real(x * freqs_cis).view(*shape)
+    else:
+        o_r = x[..., 0] * freqs_cis[..., 0] - x[..., 1] * freqs_cis[..., 1]
+        o_i = x[..., 0] * freqs_cis[..., 1] + x[..., 1] * freqs_cis[..., 0]
+        return torch.stack([o_r, o_i], dim=-1).view(*shape)
 
 
 class RMSNorm(nn.Module):
@@ -82,16 +90,6 @@ class Embedding(nn.Embedding):
         pass
 
 
-@torch.jit.script_if_tracing
-def merge_kv_cache(k: Tensor, v: Tensor, kv_cache: tuple[Tensor, Tensor], use_past: torch.BoolTensor):
-    if use_past:
-        k_cache, v_cache = kv_cache
-        k = torch.cat([k_cache, k], dim=1)
-        v = torch.cat([v_cache, v], dim=1)
-    kv_cache = (k.detach(), v.detach())
-    return k, v, kv_cache
-
-
 class ChatGLM2Attention(nn.Module):
     def __init__(
         self,
@@ -120,7 +118,7 @@ class ChatGLM2Attention(nn.Module):
     def forward(
         self,
         x: Tensor,
-        freqs_cis: tuple[Tensor, ...],
+        freqs_cis: Tensor,
         attention_mask: Optional[Tensor] = None,
         kv_cache: Optional[tuple[Tensor, ...]] = None,
         use_past = False,
@@ -157,7 +155,11 @@ class ChatGLM2Attention(nn.Module):
         q = apply_rotary_emb(q, freqs_cis, shape_q)
         k = apply_rotary_emb(k, freqs_cis, shape_kv)
 
-        k, v, kv_cache = merge_kv_cache(k, v, kv_cache, use_past)
+        if use_past:
+            k_cache, v_cache = kv_cache
+            k = torch.cat([k_cache, k], dim=1)
+            v = torch.cat([v_cache, v], dim=1)
+        kv_cache = (k.detach(), v.detach())
 
         q = q.permute(0, 2, 3, 1, 4)
         k = k.permute(0, 2, 3, 4, 1)
@@ -235,7 +237,7 @@ class ChatGLM2Block(nn.Module):
     def forward(
         self,
         x: Tensor,
-        freqs_cis: tuple[Tensor, ...],
+        freqs_cis: Tensor,
         attention_mask: Optional[Tensor] = None,
         kv_cache: Optional[tuple[Tensor, ...]] = None,
         use_past = False,
@@ -270,7 +272,7 @@ class ChatGLM2Model(nn.Module):
             config.hidden_size, config.vocab_size, bias=False, dtype=dtype)
 
         # half of head_dim bypassed
-        d_freqs_cis = config.head_hidden_size // 2
+        d_freqs_cis = config.head_hidden_size
         self.d_freqs_cis = d_freqs_cis
         freqs_cis_cache = precompute_freqs_cis(d_freqs_cis, config.max_sequence_length) \
             .view(config.max_sequence_length, -1).to(dtype=dtype)
