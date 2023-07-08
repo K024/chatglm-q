@@ -9,7 +9,8 @@ from chatglm_q.decoder import ChatGLMDecoder, chat_template
 @st.cache_resource
 def create_model():
     device = torch.device("cuda")
-    decoder = ChatGLMDecoder.from_pretrained("K024/chatglm-6b-int4g32", device)
+    decoder = ChatGLMDecoder.from_pretrained("K024/chatglm2-6b-int4g32", device)
+    # decoder.time_log = True # log generation performance
     return decoder
 
 with st.spinner("加载模型中..."):
@@ -25,23 +26,25 @@ if "history" not in st.session_state:
 with st.sidebar:
     st.markdown("## 采样参数")
 
-    max_tokens = st.number_input("max_tokens", min_value=1, max_value=500, value=200)
+    max_tokens = st.number_input("max_tokens", min_value=1, max_value=2000, value=800)
     temperature = st.number_input("temperature", min_value=0.1, max_value=4.0, value=1.0)
-    top_p = st.number_input("top_p", min_value=0.1, max_value=1.0, value=0.7)
-    top_k = st.number_input("top_k", min_value=1, max_value=500, value=50)
+    top_p = st.number_input("top_p", min_value=0.1, max_value=1.0, value=0.8)
+    top_k = st.number_input("top_k", min_value=1, max_value=100, value=50)
 
     if st.button("清空上下文"):
         st.session_state.message = ""
         st.session_state.history = []
 
     st.markdown("""
-    [ChatGLM](https://huggingface.co/THUDM/chatglm-6b)
+    [ChatGLM2](https://huggingface.co/THUDM/chatglm2-6b)
+
+    [chatglm-q](https://github.com/K024/chatglm-q)
     """)
 
 
 # main body
 
-st.markdown("## ChatGLM")
+st.markdown("## ChatGLM2")
 
 history: list[tuple[str, str]] = st.session_state.history
 

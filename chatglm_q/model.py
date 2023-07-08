@@ -121,7 +121,6 @@ class ChatGLM2Attention(nn.Module):
         freqs_cis: Tensor,
         attention_mask: Optional[Tensor] = None,
         kv_cache: Optional[tuple[Tensor, ...]] = None,
-        use_past = False,
     ):
         '''
         x:
@@ -136,7 +135,6 @@ class ChatGLM2Attention(nn.Module):
 
         kv_cache:
             Tuple of (k_cache, v_cache)
-            Shape: (n_batch, n_seq - 1, n_head, d_head)
         '''
         n_batch, n_seq, _ = x.shape
         d_head, n_head, n_groups = self.d_head, self.n_head, self.n_groups
@@ -155,7 +153,7 @@ class ChatGLM2Attention(nn.Module):
         q = apply_rotary_emb(q, freqs_cis, shape_q)
         k = apply_rotary_emb(k, freqs_cis, shape_kv)
 
-        if use_past:
+        if kv_cache is not None:
             k_cache, v_cache = kv_cache
             k = torch.cat([k_cache, k], dim=1)
             v = torch.cat([v_cache, v], dim=1)
@@ -240,14 +238,12 @@ class ChatGLM2Block(nn.Module):
         freqs_cis: Tensor,
         attention_mask: Optional[Tensor] = None,
         kv_cache: Optional[tuple[Tensor, ...]] = None,
-        use_past = False,
     ):
         h, kv_cache = self.attn(
             x=self.attn_ln(x),
             freqs_cis=freqs_cis,
             attention_mask=attention_mask,
             kv_cache=kv_cache,
-            use_past=use_past,
         )
         x = x + h
         h = self.ffn(self.ffn_ln(x))
@@ -286,8 +282,7 @@ class ChatGLM2Model(nn.Module):
         position_ids: Optional[torch.LongTensor] = None,
         labels: Optional[torch.LongTensor] = None,
         past_key_values: Optional[tuple[tuple[Tensor, ...], ...]] = None,
-        use_past = True,
-        predict_last_one_token = False,
+        incremental_generate = False,
     ):
         '''
         x:
@@ -325,7 +320,7 @@ class ChatGLM2Model(nn.Module):
         attention_mask = (causal_mask[None, ...] | ~attention_mask[:, None, :].bool()).float() * -1e10
 
         # for incremental generation
-        if has_past_key_values:
+        if has_past_key_values and incremental_generate:
             if input_ids is not None:
                 input_ids = input_ids[:, -1:]
             else:
@@ -341,7 +336,7 @@ class ChatGLM2Model(nn.Module):
 
         # forward layers
         h = self.dropout(input_embeddings)
-        current_key_values = tuple() if use_past else None
+        current_key_values = tuple()
         for i, layer in enumerate(self.layers):
             kv_cache = past_key_values[i] if has_past_key_values else None
             h, kv_cache = layer(
@@ -349,21 +344,19 @@ class ChatGLM2Model(nn.Module):
                 freqs_cis=freqs_cis,
                 attention_mask=attention_mask,
                 kv_cache=kv_cache,
-                use_past=has_past_key_values and use_past
             )
-            if use_past:
-                current_key_values += (kv_cache, )
+            current_key_values += (kv_cache, )
 
         h = self.final_ln(h)
 
-        if predict_last_one_token:
+        if incremental_generate:
             output = self.lm_head(h[:, -1:, :])
             return None, output, current_key_values
 
         output: Tensor = self.lm_head(h)
 
         if labels is not None:
-            assert not has_past_key_values, "'past_key_values' should not be used when training"
+            assert not (has_past_key_values and incremental_generate), "'incremental_generate' should not be used when training"
             n_classes = self.config.vocab_size
             shift_logits = output[..., :-1, :].contiguous().float()
             shift_labels = labels[..., 1:].contiguous()
