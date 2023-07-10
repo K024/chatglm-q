@@ -1,0 +1,35 @@
+
+===========
+
+models/chatglm2-6b-safe
+activation: float16
+
+ppl: 50.538864
+
+===========
+
+models/chatglm2-6b-int8
+activation: float16
+
+ppl: 50.485122
+
+===========
+
+models/chatglm2-6b-int8-naive
+activation: float16
+
+ppl: 50.768932
+
+===========
+
+models/chatglm2-6b-int4g32
+activation: float16
+
+ppl: 50.558248
+
+===========
+
+models/chatglm2-6b-int4g32-naive
+activation: float16
+
+ppl: 51.353648

@@ -5,7 +5,7 @@ from typing import Any, Union, Literal
 from sentencepiece import SentencePieceProcessor
 
 
-class BatchEncoding(dict):
+class BatchEncoding(dict[str, torch.Tensor]):
     def to(self, device):
         for key in list(self.keys()):
             if isinstance(self[key], torch.Tensor):
@@ -73,6 +73,7 @@ class ChatGLM2Tokenizer:
         padding: Literal[True, False, "left", "right"] = False, # default pad to left
         max_length: int = None,
         return_tensors: Literal[False, "pt", "np"] = False,
+        return_labels = False,
     ) -> BatchEncoding:
         if isinstance(text, str):
             text = [text]
@@ -125,8 +126,16 @@ class ChatGLM2Tokenizer:
             attention_mask = torch.tensor(attention_mask, dtype=torch.long)
             position_ids = torch.tensor(position_ids, dtype=torch.long)
 
-        return BatchEncoding(
+        inputs = BatchEncoding(
             input_ids=input_ids,
             attention_mask=attention_mask,
             position_ids=position_ids,
         )
+
+        if return_labels:
+            assert return_tensors == "pt", "'return_labels' should be used with return_tensors='pt'"
+            # -100: CrossEntropyLoss ignore_index
+            labels = input_ids.masked_fill(~attention_mask.bool(), -100)
+            inputs["labels"] = labels
+
+        return inputs

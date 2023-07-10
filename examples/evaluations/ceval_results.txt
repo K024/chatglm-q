@@ -1,0 +1,63 @@
+
+direct_template = "[Round 1]\n\n问：{}\n\n答：正确的选项是："
+chain_of_thoughts = False
+
+================================
+
+models/chatglm2-6b-safe
+activation: float16
+
+total           : 714/1346 53.05%
+-------
+Humanities      : 146/257 56.81%
+Other           : 206/384 53.65%
+STEM            : 190/430 44.19%
+Social_Science  : 172/275 62.55%
+
+================================
+
+models/chatglm2-6b-int8
+activation: float16
+
+total           : 714/1346 53.05%
+-------
+Humanities      : 149/257 57.98%
+Other           : 205/384 53.39%
+STEM            : 190/430 44.19%
+Social_Science  : 170/275 61.82%
+
+================================
+
+models/chatglm2-6b-int8-naive
+activation: float16
+
+total           : 714/1346 53.05%
+-------
+Humanities      : 147/257 57.20%
+Other           : 207/384 53.91%
+STEM            : 191/430 44.42%
+Social_Science  : 169/275 61.45%
+
+================================
+
+models/chatglm2-6b-int4g32
+activation: float16
+
+total           : 708/1346 52.60%
+-------
+Humanities      : 147/257 57.20%
+Other           : 199/384 51.82%
+STEM            : 196/430 45.58%
+Social_Science  : 166/275 60.36%
+
+================================
+
+models/chatglm2-6b-int4g32-naive
+activation: float16
+
+total           : 716/1346 53.19%
+-------
+Humanities      : 152/257 59.14%
+Other           : 195/384 50.78%
+STEM            : 201/430 46.74%
+Social_Science  : 168/275 61.09%

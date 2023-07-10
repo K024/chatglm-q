@@ -24,7 +24,7 @@ calibrate_data_idx = torch.randperm(len(all_data))[:calibrate_data_size] \
 data = [
     tokenizer([
         f"问：{all_data[idx]['inputs_pretokenized']}\n\n"
-        f"答：{all_data[idx]['targets_pretokenized']}"
+        f"答：{all_data[idx]['targets_pretokenized'][0]}"
         for idx in batch
     ], padding=True, return_tensors="pt")
     for batch in calibrate_data_idx
