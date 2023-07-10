@@ -67,7 +67,10 @@ def create_quant_int4_model(config=ChatGLM2Config(), group_size=32, dtype=None):
 
 
 @torch.no_grad()
-def load_model_and_tokenizer(model_path: Union[str, Path], torch_dtype=None, load_model=True, load_tokenizer=True):
+def load_model_and_tokenizer(
+    model_path: Union[str, Path], torch_dtype=None, load_model=True, load_tokenizer=True,
+) -> tuple[ChatGLM2Config, ChatGLM2Model, ChatGLM2Tokenizer]:
+
     model_path = Path(model_path)
     config_path = model_path / "config.json"
     config = ChatGLMLoadConfig.from_json(config_path.read_bytes())
@@ -153,51 +156,4 @@ def save_model_and_tokenizer(
             save_file(weights, path / file)
 
     config_path = path / "config.json"
-    config_path.write_text(config.to_json())
-
-
-@torch.no_grad()
-def convert_transformers_weights(model_path, target_path):
-    name_mapping = {
-        'transformer.embedding.word_embeddings.weight': 'word_embedding.weight',
-        'transformer.encoder.final_layernorm.weight': 'final_ln.weight',
-        'transformer.output_layer.weight': 'lm_head.weight'
-    }
-
-    for i in range(28):
-        name_mapping.update({
-            f'transformer.encoder.layers.{i}.input_layernorm.weight': f'layers.{i}.attn_ln.weight',
-            f'transformer.encoder.layers.{i}.self_attention.query_key_value.weight': f'layers.{i}.attn.qkv_proj.weight',
-            f'transformer.encoder.layers.{i}.self_attention.query_key_value.bias': f'layers.{i}.attn.qkv_proj.bias',
-            f'transformer.encoder.layers.{i}.self_attention.dense.weight': f'layers.{i}.attn.o_proj.weight',
-            f'transformer.encoder.layers.{i}.post_attention_layernorm.weight': f'layers.{i}.ffn_ln.weight',
-            f'transformer.encoder.layers.{i}.mlp.dense_h_to_4h.weight': f'layers.{i}.ffn.w_in.weight',
-            f'transformer.encoder.layers.{i}.mlp.dense_4h_to_h.weight': f'layers.{i}.ffn.w_out.weight',
-        })
-
-    model_path = Path(model_path)
-    target_path = Path(target_path)
-    target_path.mkdir(parents=True, exist_ok=True)
-
-    indices = json.loads((model_path / "pytorch_model.bin.index.json").read_bytes())
-    bin_files = set(indices["weight_map"].values())
-
-    for bin_file in tqdm(bin_files):
-        state_dict = torch.load(model_path / bin_file)
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            if k not in name_mapping:
-                print(f"Unused weight '{k}'")
-                continue
-            new_state_dict[name_mapping[k]] = v
-
-        save_file(new_state_dict, target_path / bin_file.replace(".bin", ".safetensors"))
-
-    config = ChatGLMLoadConfig(
-        weight_files = [bin_file.replace(".bin", ".safetensors") for bin_file in bin_files]
-    )
-
-    shutil.copy(model_path / "tokenizer.model", target_path / config.tokenizer_file)
-
-    config_path = target_path / "config.json"
     config_path.write_text(config.to_json())

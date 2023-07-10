@@ -73,7 +73,7 @@ class ChatGLM2Tokenizer:
         padding: Literal[True, False, "left", "right"] = False, # default pad to left
         max_length: int = None,
         return_tensors: Literal[False, "pt", "np"] = False,
-    ) -> Any:
+    ) -> BatchEncoding:
         if isinstance(text, str):
             text = [text]
         if isinstance(text_pair, str):

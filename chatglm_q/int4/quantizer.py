@@ -92,7 +92,6 @@ class GPTQLinearQuantizer():
         self.hessian = torch.zeros((self.n_columns, self.n_columns), device=layer.weight.device)
         self.n_samples = 0
         self.debug_input = None
-        self.debug_output = None
 
     @torch.no_grad()
     def forward_hook(self, module: nn.Module, inputs: tuple[Tensor], output: Tensor):
@@ -101,7 +100,6 @@ class GPTQLinearQuantizer():
             input = input.flatten(0, -2)
 
         self.debug_input = input.detach()
-        self.debug_output = output.detach()
 
         new_samples, d_hidden = input.shape
         assert d_hidden == self.n_columns
@@ -173,8 +171,10 @@ class GPTQLinearQuantizer():
 
             weight[:, i2:] -= err_block.matmul(hessian_inv[i1:i2, i2:])
 
-        quant_out = nn.functional.linear(self.debug_input, grid_weight, self.layer.bias)
-        debug_loss = torch.sum((quant_out - self.debug_output) ** 2)
+        debug_output = nn.functional.linear(self.debug_input, self.layer.weight)
+        quant_out = nn.functional.linear(self.debug_input, grid_weight)
+        debug_loss = torch.mean((quant_out - debug_output) ** 2).item()
+        quant_losses = quant_losses.mean().item()
 
         scale = torch.cat(scales, dim=0)
 
@@ -185,7 +185,7 @@ class GPTQLinearQuantizer():
         grid_weight, scale, quant_losses, debug_loss = self.quantize_weight(blocksize, groupsize, percdamp)
 
         if pring_loss:
-            print(f"{quant_losses.sum()=} {debug_loss=}")
+            print(f"{quant_losses=:.8f} {debug_loss=:.8f}")
 
         original = self.layer
         modified = DynamicQuantizeLinear(original.in_features, original.out_features, original.bias is not None, groupsize)

@@ -274,6 +274,64 @@ class ChatGLM2Model(nn.Module):
             .view(config.max_sequence_length, -1).to(dtype=dtype)
         self.register_buffer("freqs_cis_cache", freqs_cis_cache, persistent=False)
 
+    def prepare_input(
+        self,
+        input_ids: Optional[torch.LongTensor] = None,
+        input_embeddings: Optional[torch.FloatTensor] = None,
+        attention_mask: Optional[torch.LongTensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        incremental_generate = False,
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        """
+        returns: (
+            input_embeddings,
+            attention_mask,
+            freqs_cis,
+        )
+        """
+        if input_embeddings is None:
+            assert input_ids is not None, "No input"
+            device = input_ids.device
+            n_batch, n_seq = input_ids.shape
+        else:
+            assert input_ids is None, "Specify either 'input_ids' or 'input_embeddings'"
+            n_batch, n_seq, _ = input_embeddings.shape
+            device = input_embeddings.device
+
+        if attention_mask is None:
+            attention_mask = torch.ones(n_batch, n_seq, dtype=torch.long, device=device)
+
+        if position_ids is None:
+            position_ids = torch.cumsum(attention_mask, dim=1) - 1
+
+        # causal mask with full prefix attention
+        # trilu is not supported in onnxruntime
+        seq = torch.arange(n_seq, device=device)
+        causal_mask = (seq[:, None] < seq[None, :])
+        # make attention_mask to float causal mask
+        attention_mask = (causal_mask[None, ...] | ~attention_mask[:, None, :].bool()).float() * -1e10
+
+        # for incremental generation
+        if incremental_generate:
+            if input_ids is not None:
+                input_ids = input_ids[:, -1:]
+            else:
+                input_embeddings = input_embeddings[:, -1:]
+            attention_mask = attention_mask[:, -1:]
+            position_ids = position_ids[:, -1:]
+
+        if input_embeddings is None:
+            input_embeddings = self.word_embedding(input_ids)
+
+        freqs_cis = F.embedding(position_ids, self.freqs_cis_cache) \
+            .view(n_batch, -1, 1, 1, self.d_freqs_cis // 2, 2)
+        
+        return (
+            input_embeddings,
+            attention_mask,
+            freqs_cis,
+        )
+
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -294,45 +352,18 @@ class ChatGLM2Model(nn.Module):
         labels:
             Same as x (no shift required) with -100 for prefix and pad tokens
         '''
-        if input_embeddings is None:
-            assert input_ids is not None, "No input"
-            device = input_ids.device
-            n_batch, n_seq = input_ids.shape
-        else:
-            assert input_ids is None, "Specify either 'input_ids' or 'input_embeddings'"
-            n_batch, n_seq, _ = input_embeddings.shape
-            device = input_embeddings.device
-
         has_past_key_values = past_key_values is not None
-        assert not has_past_key_values or len(past_key_values) > 0, "'past_key_values' is not valid"
-
-        if attention_mask is None:
-            attention_mask = torch.ones(n_batch, n_seq, dtype=torch.long, device=device)
-
-        if position_ids is None:
-            position_ids = torch.cumsum(attention_mask, dim=1) - 1
-
-        # causal mask with full prefix attention
-        # trilu is not supported in onnxruntime
-        seq = torch.arange(n_seq, device=device)
-        causal_mask = (seq[:, None] < seq[None, :])
-        # make attention_mask to float causal mask
-        attention_mask = (causal_mask[None, ...] | ~attention_mask[:, None, :].bool()).float() * -1e10
-
-        # for incremental generation
-        if has_past_key_values and incremental_generate:
-            if input_ids is not None:
-                input_ids = input_ids[:, -1:]
-            else:
-                input_embeddings = input_embeddings[:, -1:]
-            attention_mask = attention_mask[:, -1:]
-            position_ids = position_ids[:, -1:]
-
-        if input_embeddings is None:
-            input_embeddings = self.word_embedding(input_ids)
-
-        freqs_cis = F.embedding(position_ids, self.freqs_cis_cache) \
-            .view(n_batch, -1, 1, 1, self.d_freqs_cis // 2, 2)
+        (
+            input_embeddings,
+            attention_mask,
+            freqs_cis,
+        ) = self.prepare_input(
+            input_ids,
+            input_embeddings,
+            attention_mask,
+            position_ids,
+            has_past_key_values and incremental_generate
+        )
 
         # forward layers
         h = self.dropout(input_embeddings)
@@ -341,14 +372,16 @@ class ChatGLM2Model(nn.Module):
             kv_cache = past_key_values[i] if has_past_key_values else None
             h, kv_cache = layer(
                 h,
-                freqs_cis=freqs_cis,
                 attention_mask=attention_mask,
+                freqs_cis=freqs_cis,
                 kv_cache=kv_cache,
             )
             current_key_values += (kv_cache, )
 
         h = self.final_ln(h)
 
+        # when incremental_generate==True and has_past_key_values==False,
+        # h will be full sequence, but only last one needed
         if incremental_generate:
             output = self.lm_head(h[:, -1:, :])
             return None, output, current_key_values
@@ -356,7 +389,6 @@ class ChatGLM2Model(nn.Module):
         output: Tensor = self.lm_head(h)
 
         if labels is not None:
-            assert not (has_past_key_values and incremental_generate), "'incremental_generate' should not be used when training"
             n_classes = self.config.vocab_size
             shift_logits = output[..., :-1, :].contiguous().float()
             shift_labels = labels[..., 1:].contiguous()

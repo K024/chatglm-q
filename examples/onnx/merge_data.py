@@ -1,11 +1,11 @@
 # %%
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from pathlib import Path
 
 file_dir = Path(__file__).parent
-tokenizer_path = file_dir / "../models/chatglm-6b-safe/sentencepiece.model"
+tokenizer_path = file_dir / "../../models/chatglm-6b-safe/sentencepiece.model"
 
-export_path = file_dir / "../models/chatglm-6b-int8-onnx/chatglm-6b-int8-opt.onnx"
+export_path = file_dir / "../../models/chatglm-6b-int8-onnx/chatglm-6b-int8-opt.onnx"
 export_path.parent.mkdir(exist_ok=True)
 export_path = str(export_path.absolute())
 
@@ -37,7 +37,7 @@ for tensor in bar:
     onnx.external_data_helper.set_external_data(tensor, file_name)
 
 # %%
-save_path = file_dir / "../models/chatglm-6b-int8-onnx-merged/chatglm-6b-int8.onnx"
+save_path = file_dir / "../../models/chatglm-6b-int8-onnx-merged/chatglm-6b-int8.onnx"
 save_path.parent.mkdir(exist_ok=True)
 save_path = str(save_path.absolute())
 onnx.save_model(model, save_path)

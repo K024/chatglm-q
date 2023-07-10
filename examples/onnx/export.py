@@ -2,10 +2,10 @@
 from pathlib import Path
 
 file_dir = Path(__file__).parent
-model_path = file_dir / "../models/chatglm-6b-int8/"
-tokenizer_path = file_dir / "../models/chatglm-6b-safe/sentencepiece.model"
+model_path = file_dir / "../../models/chatglm-6b-int8/"
+tokenizer_path = file_dir / "../../models/chatglm-6b-safe/sentencepiece.model"
 
-export_path = file_dir / "../models/chatglm-6b-int8-onnx/chatglm-6b-int8.onnx"
+export_path = file_dir / "../../models/chatglm-6b-int8-onnx/chatglm-6b-int8.onnx"
 export_path.parent.mkdir(exist_ok=True)
 export_path = str(export_path.absolute())
 
@@ -67,7 +67,7 @@ torch.onnx.export(
 # %%
 from onnxruntime.tools.optimize_onnx_model import optimize_model
 
-output_path = file_dir / "../models/chatglm-6b-int8-onnx/chatglm-6b-int8-opt.onnx"
+output_path = file_dir / "../../models/chatglm-6b-int8-onnx/chatglm-6b-int8-opt.onnx"
 output_path.parent.mkdir(exist_ok=True)
 
 optimize_model(Path(export_path), output_path)
