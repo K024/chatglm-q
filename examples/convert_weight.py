@@ -13,7 +13,7 @@ from pathlib import Path
 
 model_path = Path(model_path)
 target_path = Path(target_path)
-target_path.mkdir(parents=True, exist_ok=True)
+target_path.mkdir(parents=True)
 
 # %%
 name_mapping = {

@@ -18,6 +18,9 @@ class BatchEncoding(dict[str, torch.Tensor]):
         except KeyError:
             raise AttributeError
 
+    def __setattr__(self, item: str, value: Any):
+        self[item] = value
+
 
 class ChatGLM2Tokenizer:
     def __init__(self, vocab_file):

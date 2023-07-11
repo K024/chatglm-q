@@ -74,14 +74,13 @@ class ChatGLMDecoder():
         generate_time = []
 
         while len(generated_tokens) < max_generated_tokens \
-            and input_ids.shape[1] < self.max_sequence_length:
+            and len(generated_tokens) + len(prefix_ids) < self.max_sequence_length:
 
             with torch.no_grad():
                 start_time = time.perf_counter()
                 _, logits, past_key_values = model(
                     input_ids=input_ids.to(self.device),
                     past_key_values=past_key_values,
-                    incremental_generate=True,
                 )
                 next_token = top_p_sampling(logits[0, -1], top_k, top_p, temperature).item()
                 end_time = time.perf_counter()
@@ -95,10 +94,7 @@ class ChatGLMDecoder():
             if response_text and response_text[-1] != "�":
                 yield response_text
 
-            input_ids = torch.cat([
-                input_ids,
-                torch.tensor([[next_token]]).long(),
-            ], dim=1)
+            input_ids = torch.tensor([[next_token]]).long()
 
         if self.time_log:
             init_time, *rest_time = generate_time
@@ -114,7 +110,7 @@ class ChatGLMDecoder():
 
 def chat_template(history: list[tuple[str, str]], current: str):
     prompt = ""
-    chat_round = 0
+    chat_round = 1
     for question, answer in history:
         prompt += f"[Round {chat_round}]\n\n问：{question}\n\n答：{answer}\n\n"
         chat_round += 1

@@ -46,20 +46,17 @@ def precompute_freqs_cis(dim: int, length: int, theta = 10000.0):
 # changed from v1
 ROTARY_VIEW_AS_COMPLEX = True
 def apply_rotary_emb(
-    x: Tensor,          # (n_batch, n_seq, n_groups, n_head, d_head)
+    x: Tensor,          # (n_batch, n_seq, n_groups, n_head, d_head // 2, 2)
     freqs_cis: Tensor,  # (n_batch, n_seq, 1, 1, d_head // 2, 2)
-    shape: list[int],
 ) -> Tensor:
-    *shape_prefix, d_head = shape
-    x = x.view(*shape_prefix, d_head // 2, 2)
     if ROTARY_VIEW_AS_COMPLEX:
         x = torch.view_as_complex(x)
         freqs_cis = torch.view_as_complex(freqs_cis)
-        return torch.view_as_real(x * freqs_cis).view(*shape)
+        return torch.view_as_real(x * freqs_cis).flatten(-2)
     else:
         o_r = x[..., 0] * freqs_cis[..., 0] - x[..., 1] * freqs_cis[..., 1]
         o_i = x[..., 0] * freqs_cis[..., 1] + x[..., 1] * freqs_cis[..., 0]
-        return torch.stack([o_r, o_i], dim=-1).view(*shape)
+        return torch.stack([o_r, o_i], dim=-1).flatten(-2)
 
 
 class RMSNorm(nn.Module):
@@ -124,14 +121,14 @@ class ChatGLM2Attention(nn.Module):
     ):
         '''
         x:
-            Shape: (n_batch, n_seq or 1 (using cache), n_state)
+            Shape: (n_batch, n_seq or n_seq_new (using cache), n_state)
 
         freqs_cis:
-            Shape: (n_batch, n_seq or 1, 1, 1, d_head // 4, 2)
+            Shape: (n_batch, n_seq or n_seq_new, 1, 1, d_head // 2, 2)
 
         attention_mask:
             0 for no mask, -inf for masked
-            Shape: (n_batch, n_seq, n_seq)
+            Shape: (n_batch, n_seq_new, n_seq)
 
         kv_cache:
             Tuple of (k_cache, v_cache)
@@ -144,14 +141,12 @@ class ChatGLM2Attention(nn.Module):
         q, k, v = torch.split(fused_qkv, split_size, dim=-1)
 
         # allow broadcast along groups
-        shape_q = [n_batch, n_seq, n_groups, n_head // n_groups, d_head]
-        shape_kv = [n_batch, n_seq, n_groups, 1, d_head]
-        q = q.view(*shape_q)
-        k = k.view(*shape_kv)
-        v = v.view(*shape_kv)
+        q = q.view(n_batch, n_seq, n_groups, n_head // n_groups, d_head // 2, 2)
+        k = k.view(n_batch, n_seq, n_groups, 1, d_head // 2, 2)
+        v = v.view(n_batch, n_seq, n_groups, 1, d_head)
 
-        q = apply_rotary_emb(q, freqs_cis, shape_q)
-        k = apply_rotary_emb(k, freqs_cis, shape_kv)
+        q = apply_rotary_emb(q, freqs_cis)
+        k = apply_rotary_emb(k, freqs_cis)
 
         if kv_cache is not None:
             k_cache, v_cache = kv_cache
@@ -164,15 +159,15 @@ class ChatGLM2Attention(nn.Module):
         v = v.permute(0, 2, 3, 1, 4)
 
         # maybe useless, test needed
-        scaling_coeff = float(self.layer_idx + 1)
-        q = q / (math.sqrt(d_head) * scaling_coeff)
+        # scaling_coeff = float(self.layer_idx + 1)
+        q = q / (math.sqrt(d_head)) #  * scaling_coeff)
 
-        # (n_batch, n_group, n_heads, n_new, n_seq)
+        # (n_batch, n_group, n_heads, n_seq, n_seq_past)
         qk = torch.matmul(q, k) # / math.sqrt(d_head) # no need to scale again
         if attention_mask is not None:
             qk = qk + attention_mask[:, None, None, :, :]
 
-        scores = F.softmax(qk.float() * scaling_coeff, dim=-1).type_as(x)
+        scores = F.softmax(qk.float(), dim=-1).type_as(x) # qk / scaling_coeff
         scores = self.dropout(scores)
 
         output = torch.matmul(scores, v)
@@ -280,7 +275,7 @@ class ChatGLM2Model(nn.Module):
         input_embeddings: Optional[torch.FloatTensor] = None,
         attention_mask: Optional[torch.LongTensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
-        incremental_generate = False,
+        past_key_values: Optional[tuple[tuple[Tensor, ...], ...]] = None,
     ) -> tuple[Tensor, Tensor, Tensor]:
         """
         returns: (
@@ -292,40 +287,39 @@ class ChatGLM2Model(nn.Module):
         if input_embeddings is None:
             assert input_ids is not None, "No input"
             device = input_ids.device
-            n_batch, n_seq = input_ids.shape
+            input_embeddings = self.word_embedding(input_ids)
+            n_batch, n_seq_new = input_ids.shape
         else:
             assert input_ids is None, "Specify either 'input_ids' or 'input_embeddings'"
-            n_batch, n_seq, _ = input_embeddings.shape
             device = input_embeddings.device
+            n_batch, n_seq_new, _ = input_embeddings.shape
+
+        if past_key_values is not None:
+            n_seq_past = past_key_values[0][0].shape[1]
+            n_seq = n_seq_new + n_seq_past
+        else:
+            n_seq = n_seq_new
 
         if attention_mask is None:
             attention_mask = torch.ones(n_batch, n_seq, dtype=torch.long, device=device)
 
         if position_ids is None:
-            position_ids = torch.cumsum(attention_mask, dim=1) - 1
+            position_ids = torch.cumsum(attention_mask, dim=1)
 
         # causal mask with full prefix attention
         # trilu is not supported in onnxruntime
         seq = torch.arange(n_seq, device=device)
         causal_mask = (seq[:, None] < seq[None, :])
-        # make attention_mask to float causal mask
+        # make attention_mask to a float causal mask
         attention_mask = (causal_mask[None, ...] | ~attention_mask[:, None, :].bool()).float() * -1e10
 
-        # for incremental generation
-        if incremental_generate:
-            if input_ids is not None:
-                input_ids = input_ids[:, -1:]
-            else:
-                input_embeddings = input_embeddings[:, -1:]
-            attention_mask = attention_mask[:, -1:]
-            position_ids = position_ids[:, -1:]
-
-        if input_embeddings is None:
-            input_embeddings = self.word_embedding(input_ids)
+        # align to input_ids
+        attention_mask = attention_mask[:, -n_seq_new:]
+        position_ids = position_ids[:, -n_seq_new:]
 
         freqs_cis = F.embedding(position_ids, self.freqs_cis_cache) \
-            .view(n_batch, -1, 1, 1, self.d_freqs_cis // 2, 2)
-        
+            .view(n_batch, n_seq_new, 1, 1, self.d_freqs_cis // 2, 2)
+
         return (
             input_embeddings,
             attention_mask,
@@ -340,19 +334,25 @@ class ChatGLM2Model(nn.Module):
         position_ids: Optional[torch.LongTensor] = None,
         labels: Optional[torch.LongTensor] = None,
         past_key_values: Optional[tuple[tuple[Tensor, ...], ...]] = None,
-        incremental_generate = False,
     ):
         '''
-        x:
-            Shape: (n_batch, n_seq)
+        input_ids:
+            Shape: (n_batch, n_seq or n_new)
 
         attention_mask:
             Shape: (n_batch, n_seq) with 1 for token and 0 for pad
 
+        position_ids:
+            Shape: (n_batch, n_seq or n_new) same as input_ids
+
         labels:
-            Same as x (no shift required) with -100 for prefix and pad tokens
+            Same as input_ids (no shift required) with -100 for prefix and pad tokens
+
+        past_key_values:
+            Tuple[Tuple[Tensor, Tensor], ...] where each:
+            Shape: (n_batch, n_past, num_multi_query_groups, 1, head_hidden_size)
+                    n_seq = n_past + n_new
         '''
-        has_past_key_values = past_key_values is not None
         (
             input_embeddings,
             attention_mask,
@@ -362,14 +362,14 @@ class ChatGLM2Model(nn.Module):
             input_embeddings,
             attention_mask,
             position_ids,
-            has_past_key_values and incremental_generate
+            past_key_values,
         )
 
         # forward layers
         h = self.dropout(input_embeddings)
         current_key_values = tuple()
         for i, layer in enumerate(self.layers):
-            kv_cache = past_key_values[i] if has_past_key_values else None
+            kv_cache = past_key_values[i] if past_key_values is not None else None
             h, kv_cache = layer(
                 h,
                 attention_mask=attention_mask,
@@ -379,13 +379,6 @@ class ChatGLM2Model(nn.Module):
             current_key_values += (kv_cache, )
 
         h = self.final_ln(h)
-
-        # when incremental_generate==True and has_past_key_values==False,
-        # h will be full sequence, but only last one needed
-        if incremental_generate:
-            output = self.lm_head(h[:, -1:, :])
-            return None, output, current_key_values
-
         output: Tensor = self.lm_head(h)
 
         if labels is not None:

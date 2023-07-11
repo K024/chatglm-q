@@ -51,7 +51,6 @@ for category, test_name, data in progress_bar:
               padding=True,
               return_tensors="pt",
           ).to(device),
-          incremental_generate=True
       )
       model_choices = model_output[0, -1, choice_tokens]
       model_predict = torch.argmax(model_choices).item()
