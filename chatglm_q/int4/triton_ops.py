@@ -18,7 +18,7 @@ def is_power_of_two(n: int):
 @triton.autotune(
     configs=[
         # multiple configs not working for triton==2.0.0.post1
-        triton.Config({'BLOCK_M': 32, 'BLOCK_N': 64, 'GROUP_M': 8}, num_stages=2, num_warps=8),
+        triton.Config({'BLOCK_M': 16, 'BLOCK_N': 128, 'GROUP_M': 8}, num_stages=2, num_warps=8),
     ],
     key=['M', 'N', 'K'],
 )
@@ -142,7 +142,7 @@ def dynamic_quant_matmul_s4(a: Tensor, b: Tensor, b_scale: Tensor, allow_tf32: b
 @triton.autotune(
     configs=[
         # multiple configs not working for triton==2.0.0.post1
-        triton.Config({'BLOCK_M': 32, 'BLOCK_K': 64, 'GROUP_M': 8}, num_stages=2, num_warps=8),
+        triton.Config({'BLOCK_M': 16, 'BLOCK_K': 128, 'GROUP_M': 8}, num_stages=2, num_warps=8),
     ],
     key=['M', 'N', 'K'],
 )

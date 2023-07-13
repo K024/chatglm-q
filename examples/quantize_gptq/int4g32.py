@@ -105,7 +105,7 @@ del current_h
 
 # %%
 # set torch_dtype (activation type) as needed
-config = ChatGLMLoadConfig(model_config=model.config, quant_type="int8", torch_dtype="float16")
+config = ChatGLMLoadConfig(model_config=model.config, quant_type="int4g32", torch_dtype="float16")
 
 save_model_and_tokenizer("../../models/chatglm2-6b-int4g32", config, model, tokenizer)
 # %%

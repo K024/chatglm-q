@@ -1,35 +1,41 @@
 
+batch_size = 20
+
 ===========
 
 models/chatglm2-6b-safe
+activation: bfloat16
+
+ppl: 50.572124
+
 activation: float16
 
-ppl: 50.538864
+ppl: 50.539203
 
 ===========
 
 models/chatglm2-6b-int8
 activation: float16
 
-ppl: 50.485122
+ppl: 50.484177
 
 ===========
 
 models/chatglm2-6b-int8-naive
 activation: float16
 
-ppl: 50.768932
+ppl: 50.764550
 
 ===========
 
 models/chatglm2-6b-int4g32
 activation: float16
 
-ppl: 50.558248
+ppl: 50.418127
 
 ===========
 
 models/chatglm2-6b-int4g32-naive
 activation: float16
 
-ppl: 51.353648
+ppl: 51.354212

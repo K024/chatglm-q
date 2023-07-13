@@ -28,8 +28,6 @@ class DynamicQuantizeMatMul(torch.autograd.Function):
     In PyTorch, the weigth is dequantized first.
     '''
 
-    THROW_IF_NOT_USING_TRITON_OPS = False
-
     @staticmethod
     def forward(ctx: FunctionCtx, A: Tensor, B: Tensor, b_scale: Tensor):
         # 'A' must be saved to get grad

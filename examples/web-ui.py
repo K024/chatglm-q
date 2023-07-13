@@ -9,7 +9,8 @@ from chatglm_q.decoder import ChatGLMDecoder, chat_template
 @st.cache_resource
 def create_model():
     device = torch.device("cuda")
-    decoder = ChatGLMDecoder.from_pretrained("K024/chatglm2-6b-int4g32", device)
+    torch_dtype = torch.float16
+    decoder = ChatGLMDecoder.from_pretrained("K024/chatglm2-6b-int4g32", device, torch_dtype)
     # decoder.time_log = True # log generation performance
     return decoder
 

@@ -58,7 +58,7 @@ for bin_file in tqdm(bin_files):
 
 config = ChatGLMLoadConfig(
     weight_files = [bin_file.replace(".bin", ".safetensors") for bin_file in bin_files],
-    torch_dtype="float16",
+    torch_dtype="bfloat16",
 )
 
 shutil.copy(model_path / "tokenizer.model", target_path / config.tokenizer_file)

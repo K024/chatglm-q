@@ -21,7 +21,8 @@ import torch
 from chatglm_q.loader import load_model_and_tokenizer
 
 device = torch.device("cuda")
-_, model, tokenizer = load_model_and_tokenizer("../../models/chatglm2-6b-safe")
+torch_dtype = torch.float16
+_, model, tokenizer = load_model_and_tokenizer("../../models/chatglm2-6b-safe", torch_dtype)
 model = model.to(device)
 
 # %%
