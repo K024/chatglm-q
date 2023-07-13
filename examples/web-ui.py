@@ -1,6 +1,5 @@
 import torch
 import streamlit as st
-from streamlit_chat import message
 from chatglm_q.decoder import ChatGLMDecoder, chat_template
 
 
@@ -33,7 +32,6 @@ with st.sidebar:
     top_k = st.number_input("top_k", min_value=1, max_value=100, value=50)
 
     if st.button("清空上下文"):
-        st.session_state.message = ""
         st.session_state.history = []
 
     st.markdown("""
@@ -54,18 +52,17 @@ if len(history) == 0:
 
 
 for idx, (question, answer) in enumerate(history):
-    message(question, is_user=True, key=f"history_question_{idx}")
-    st.write(answer)
-    st.markdown("---")
+    with st.chat_message("user"):
+        st.write(question)
+    with st.chat_message("assistant"):
+        st.write(answer)
 
+question = st.chat_input("消息", key="message")
 
-next_answer = st.container()
-
-question = st.text_area(label="消息", key="message")
-
-if st.button("发送") and len(question.strip()):
-    with next_answer:
-        message(question, is_user=True, key="message_question")
+if question:
+    with st.chat_message("user"):
+        st.write(question)
+    with st.chat_message("assistant"):
         empty = st.empty()
         with st.spinner("正在回复中"):
             prompt = chat_template(history, question)
@@ -77,6 +74,5 @@ if st.button("发送") and len(question.strip()):
                 temperature=temperature,
             ):
                 empty.write(answer)
-        st.markdown("---")
 
     st.session_state.history = history + [(question, answer)]

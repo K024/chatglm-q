@@ -59,7 +59,7 @@ For more examples like weight conversion, manual quantization, onnx model export
 ## Web UI
 
 ```bash
-pip install streamlit streamlit-chat
+pip install streamlit
 cd examples
 streamlit run web-ui.py
 ```
