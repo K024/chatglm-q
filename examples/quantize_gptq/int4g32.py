@@ -2,7 +2,7 @@
 import json
 import torch
 from pathlib import Path
-from chatglm_q.loader import ChatGLMLoadConfig, load_model_and_tokenizer, save_model_and_tokenizer
+from chatglm_q.loader import LoadConfig, load_model_and_tokenizer, save_model_and_tokenizer
 
 torch.manual_seed(42)
 
@@ -105,7 +105,12 @@ del current_h
 
 # %%
 # set torch_dtype (activation type) as needed
-config = ChatGLMLoadConfig(model_config=model.config, quant_type="int4g32", torch_dtype="float16")
+config = LoadConfig(
+    model_type="ChatGLM2Model",
+    model_config=model.config,
+    quant_type="int4g32",
+    torch_dtype="float16"
+)
 
 save_model_and_tokenizer("../../models/chatglm2-6b-int4g32", config, model, tokenizer)
 # %%

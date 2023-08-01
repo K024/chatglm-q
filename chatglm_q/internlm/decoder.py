@@ -1,12 +1,7 @@
-import re
 import time
 import torch
-from pathlib import Path
-from typing import Union
-from huggingface_hub import snapshot_download
-from .model import ChatGLM2Model
-from .tokenizer import ChatGLM2Tokenizer
-from .loader import ChatGLMLoadConfig, load_model_and_tokenizer, save_model_and_tokenizer
+from .model import InternLMModel
+from .tokenizer import InternLMTokenizer
 
 
 def top_p_sampling(logits: torch.Tensor, top_k=100, top_p=0.8, temperature=1.0):
@@ -27,13 +22,13 @@ def top_p_sampling(logits: torch.Tensor, top_k=100, top_p=0.8, temperature=1.0):
     return output[..., 0]
 
 
-class ChatGLMDecoder():
+class InternLMDecoder():
     def __init__(
         self,
-        config: ChatGLMLoadConfig,
-        model: ChatGLM2Model,
-        tokenizer: ChatGLM2Tokenizer,
-        eos_token = "</s>",
+        config,
+        model: InternLMModel,
+        tokenizer: InternLMTokenizer,
+        eos_tokens = ["<s>", "</s>", "<eoa>"],
         device = None,
         max_sequence_length: int = None,
         time_log = False,
@@ -42,29 +37,15 @@ class ChatGLMDecoder():
         self.model = model
         self.tokenizer = tokenizer
         self.device = device
-        self.eos_token_id = tokenizer[eos_token]
-        self.max_sequence_length = max_sequence_length or config.model_config.max_sequence_length
+        if not isinstance(eos_tokens, list):
+            eos_tokens = [eos_tokens]
+        self.eos_token_ids = [tokenizer[t] for t in eos_tokens]
+        self.max_sequence_length = max_sequence_length or model.config.max_sequence_length
         self.time_log = time_log
-
-
-    @staticmethod
-    def from_pretrained(path_or_repo_id: Union[Path, str], device=None, torch_dtype=None, cache_dir=None, token=None):
-        path = Path(path_or_repo_id)
-        if not path.exists() or not path.is_dir():
-            assert isinstance(path_or_repo_id, str)
-            path = snapshot_download(path_or_repo_id, cache_dir=cache_dir, token=token)
-        config, model, tokenizer = load_model_and_tokenizer(path, torch_dtype)
-        model.to(device=device)
-        return ChatGLMDecoder(config, model, tokenizer, device=device)
-
-
-    def save_pretrained(self, path: Union[Path, str], shard=True):
-        save_model_and_tokenizer(path, self.config, self.model, self.tokenizer, shard=shard)
-
 
     def generate(self, prefix_text: str, max_generated_tokens=400, top_k=100, top_p=0.8, temperature=1.0):
         model, tokenizer = self.model, self.tokenizer
-        eos_token_id = self.eos_token_id
+        eos_token_ids = self.eos_token_ids
 
         prefix_ids = tokenizer.encode(prefix_text)
         input_ids = torch.LongTensor([prefix_ids])
@@ -87,10 +68,10 @@ class ChatGLMDecoder():
                 generate_time.append(end_time - start_time)
 
             generated_tokens += [next_token]
-            if next_token == eos_token_id:
+            if next_token in eos_token_ids:
                 break
 
-            response_text = process_response(tokenizer.decode(generated_tokens))
+            response_text = tokenizer.decode(generated_tokens)
             if response_text and response_text[-1] != "�":
                 yield response_text
 
@@ -105,30 +86,16 @@ class ChatGLMDecoder():
             print(f"  gen: {len(rest_time) / sum(rest_time):.6f} tok/s")
             print(f"  avg: {len(generate_time) / sum(generate_time):.6f} tok/s")
 
-        return process_response(tokenizer.decode(generated_tokens))
+        return tokenizer.decode(generated_tokens)
 
 
-def chat_template(history: list[tuple[str, str]], current: str):
+    def chat(self, history: list[tuple[str, str]], question: str, **kwargs):
+        return self.generate(chat_template(history, question), **kwargs)
+
+
+def chat_template(history: list[tuple[str, str]], query: str):
     prompt = ""
-    chat_round = 1
-    for question, answer in history:
-        prompt += f"[Round {chat_round}]\n\n问：{question}\n\n答：{answer}\n\n"
-        chat_round += 1
-    prompt += f"[Round {chat_round}]\n\n问：{current}\n\n答："
+    for q, a in history:
+        prompt += f"<s><|User|>:{q}<eoh>\n<|Bot|>:{a}<eoa>\n"
+    prompt += f"<s><|User|>:{query}<eoh>\n<|Bot|>:"
     return prompt
-
-
-def process_response(response: str):
-    response = response.strip()
-    response = response.replace("[[训练时间]]", "2023年")
-    punkts = [
-        [",", "，"],
-        ["!", "！"],
-        [":", "："],
-        [";", "；"],
-        ["\?", "？"],
-    ]
-    for item in punkts:
-        response = re.sub(r"([\u4e00-\u9fff])%s" % item[0], r"\1%s" % item[1], response)
-        response = re.sub(r"%s([\u4e00-\u9fff])" % item[0], r"%s\1" % item[1], response)
-    return response

@@ -1,8 +1,8 @@
 # %%
 from huggingface_hub import snapshot_download
 
-target_path = "../models/chatglm2-6b-safe"
-path_or_repo_id = "https://huggingface.co/THUDM/chatglm2-6b"
+target_path = "../../models/chatglm2-6b-safe"
+path_or_repo_id = "THUDM/chatglm2-6b"
 cache_dir = None
 token = None
 
@@ -40,7 +40,7 @@ import torch
 from tqdm.auto import tqdm
 from collections import OrderedDict
 from safetensors.torch import save_file
-from chatglm_q.loader import ChatGLMLoadConfig
+from chatglm_q.loader import LoadConfig
 
 indices = json.loads((model_path / "pytorch_model.bin.index.json").read_bytes())
 bin_files = set(indices["weight_map"].values())
@@ -56,7 +56,9 @@ for bin_file in tqdm(bin_files):
 
     save_file(new_state_dict, target_path / bin_file.replace(".bin", ".safetensors"))
 
-config = ChatGLMLoadConfig(
+config = LoadConfig(
+    model_type="ChatGLM2Model",
+    model_config={},
     weight_files = [bin_file.replace(".bin", ".safetensors") for bin_file in bin_files],
     torch_dtype="bfloat16",
 )

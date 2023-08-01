@@ -1,11 +1,13 @@
 
 # chatglm-q
 
-一个仅供参考的 [ChatGLM2](https://huggingface.co/THUDM/chatglm2-6b) 实现，去掉了 [Huggingface transformers](https://huggingface.co/docs/transformers) 依赖。这个实现为 ONNX 模型导出、int4 和 int8 量化等进行了优化调整。由于当前 [OpenAI Triton](https://github.com/openai/triton) 只支持 Linux，在 Windows 上，需要使用支持 Cuda 的 WSL2 运行（Win 11 或者 Win 10 21H2+）。
+一个仅供参考的 [ChatGLM2](https://huggingface.co/THUDM/chatglm2-6b) & [InternLM](https://github.com/InternLM/InternLM) 实现，去掉了 [Huggingface transformers](https://huggingface.co/docs/transformers) 依赖。这个实现为 ONNX 模型导出、int4 和 int8 量化等进行了优化调整。由于当前 [OpenAI Triton](https://github.com/openai/triton) 只支持 Linux，在 Windows 上，需要使用支持 Cuda 的 WSL2 运行（Win 11 或者 Win 10 21H2+）。
 
-A [ChatGLM2](https://huggingface.co/THUDM/chatglm2-6b) reference implementation without [Huggingface transformers](https://huggingface.co/docs/transformers). This implementation is optimized for ONNX export, int8 & int4 [GPTQ](https://github.com/IST-DASLab/gptq) quantization and more. Currently [OpenAI Triton](https://github.com/openai/triton) only supports Linux. If your host system is Windows 11 or Windows 10 21H2 and higher, WSL 2 with Cuda is also supported.
+A [ChatGLM2](https://huggingface.co/THUDM/chatglm2-6b) & [InternLM](https://github.com/InternLM/InternLM) reference implementation without [Huggingface transformers](https://huggingface.co/docs/transformers). This implementation is optimized for ONNX export, int8 & int4 [GPTQ](https://github.com/IST-DASLab/gptq) quantization and more. Currently [OpenAI Triton](https://github.com/openai/triton) only supports Linux. If your host system is Windows 11 or Windows 10 21H2 and higher, WSL 2 with Cuda is also supported.
 
 ## Updates
+
+新增 [InternLM](https://github.com/InternLM/InternLM) 基础支持，examples 中仍按照 ChatGLM2 给出示例代码，请自行修改部分代码。
 
 本仓库已全面升级到 ChatGLM2，不再支持第一代 ChatGLM-6b，历史代码参考 [chatglm-legacy](https://github.com/K024/chatglm-q/tree/chatglm-legacy) 分支。
 
@@ -41,14 +43,13 @@ For WSL 2 users, first check your WSL version. **DO NOT** install nvidia-driver 
 
 ```python
 import torch
-from chatglm_q.decoder import ChatGLMDecoder, chat_template
+from chatglm_q.loader import from_pretrained
 
 device = torch.device("cuda")
 # optionally pass a `torch_dtype=torch.float16` to set the activation dtype
-decoder = ChatGLMDecoder.from_pretrained("K024/chatglm2-6b-int4g32", device=device)
+decoder = from_pretrained("K024/chatglm2-6b-int4g32", device=device)
 
-prompt = chat_template([], "我是谁？")
-for text in decoder.generate(prompt):
+for text in decoder.chat([], prompt):
     print(text)
 ```
 

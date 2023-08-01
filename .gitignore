@@ -1,7 +1,8 @@
 # Project ignores
 models/
 scripts/
-data/
+data/*
+!data/*.sh
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

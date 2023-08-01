@@ -8,7 +8,7 @@ export_path = str(export_path.absolute())
 
 # %%
 import torch
-from chatglm_q import model as modeling
+from chatglm_q.chatglm import model as modeling
 from chatglm_q.loader import load_model_and_tokenizer
 
 modeling.ROTARY_VIEW_AS_COMPLEX = False

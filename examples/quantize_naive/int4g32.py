@@ -2,7 +2,7 @@
 import torch
 from torch import nn
 from tqdm.auto import tqdm
-from chatglm_q.loader import ChatGLMLoadConfig, load_model_and_tokenizer, save_model_and_tokenizer
+from chatglm_q.loader import LoadConfig, load_model_and_tokenizer, save_model_and_tokenizer
 
 _, model, tokenizer = load_model_and_tokenizer("../../models/chatglm2-6b-safe", torch.float32)
 
@@ -31,7 +31,12 @@ for name, module in tqdm(linear_layers.items()):
 
 # %%
 # set torch_dtype (activation type) as needed
-config = ChatGLMLoadConfig(model_config=model.config, quant_type="int4g32", torch_dtype="float16")
+config = LoadConfig(
+    model_type="ChatGLM2Model",
+    model_config=model.config,
+    quant_type="int4g32",
+    torch_dtype="float16"
+)
 
 save_model_and_tokenizer("../../models/chatglm2-6b-int4g32-naive", config, model, tokenizer)
 

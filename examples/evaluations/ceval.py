@@ -12,11 +12,12 @@ all_data = [
 
 # %%
 import torch
-from chatglm_q.decoder import ChatGLMDecoder
+from chatglm_q.loader import from_pretrained
+from chatglm_q.chatglm import ChatGLMDecoder
 
 activation = torch.float16
 device = torch.device("cuda")
-decoder = ChatGLMDecoder.from_pretrained("../../models/chatglm2-6b-safe", device, torch_dtype=activation)
+decoder: ChatGLMDecoder = from_pretrained("../../models/chatglm2-6b-safe", device, torch_dtype=activation)
 
 # %%
 choice_tokens = [decoder.tokenizer[choice] for choice in "ABCD"]
@@ -41,7 +42,7 @@ for category, test_name, data in progress_bar:
             think_template.format(question),
             temperature=0.5
         ))[-1]
-        prompt = final_template.format(question, thoughts),
+        prompt = final_template.format(question, thoughts)
     else:
         prompt = direct_template.format(question)
 
