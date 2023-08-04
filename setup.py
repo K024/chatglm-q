@@ -10,7 +10,7 @@ def my_test_suite():
 
 setup(
     name="chatglm-q",
-    version="0.0.2-alpha0",
+    version="0.0.3-alpha0",
     author="K024",
     description="Another ChatGLM implementation for optimized quantization",
     url="https://github.com/K024/chatglm-q", 
@@ -25,4 +25,11 @@ setup(
         "sentencepiece",
         "huggingface_hub",
     ],
+
+    extras_require={
+        "all":  [
+            "tiktoken",
+            "flash-attn",
+        ],
+    }
 )

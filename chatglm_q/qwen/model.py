@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class InternLMConfig():
+class QwenConfig():
     hidden_size: int = 4096
     inner_hidden_size: int = 11008
     head_hidden_size: int = 128
@@ -15,7 +15,7 @@ class InternLMConfig():
     num_attention_heads: int = 32
     num_layers: int = 32
 
-    vocab_size: int = 103168
+    vocab_size: int = 151936
     dropout_rate: float = 0.0
     layernorm_epsilon: float = 1e-05
     max_sequence_length: int = 2048
@@ -77,24 +77,23 @@ class Embedding(nn.Embedding):
         pass
 
 
-class InternLMAttention(nn.Module):
+class QwenAttention(nn.Module):
     def __init__(
         self,
         n_state: int,
         n_head: int,
         d_head: int,
         dropout_rate = 0.0,
-        bias = True,
+        qkv_bias = True,
+        o_bias = False,
         dtype = None,
     ):
         super().__init__()
         self.n_head = n_head
         self.d_head = d_head
         assert n_state % (n_head * 4) == 0
-        self.q_proj = Linear(n_state, d_head * n_head, bias=bias, dtype=dtype)
-        self.k_proj = Linear(n_state, d_head * n_head, bias=bias, dtype=dtype)
-        self.v_proj = Linear(n_state, d_head * n_head, bias=bias, dtype=dtype)
-        self.o_proj = Linear(d_head * n_head, n_state, bias=bias, dtype=dtype)
+        self.qkv_proj = Linear(n_state, d_head * n_head * 3, bias=qkv_bias, dtype=dtype)
+        self.o_proj = Linear(d_head * n_head, n_state, bias=o_bias, dtype=dtype)
         self.dropout = nn.Dropout(dropout_rate)
 
     def forward(
@@ -121,9 +120,11 @@ class InternLMAttention(nn.Module):
         n_batch, n_seq, _ = x.shape
         d_head, n_head = self.d_head, self.n_head
 
-        q = self.q_proj(x).view(n_batch, n_seq, n_head, d_head)
-        k = self.k_proj(x).view(n_batch, n_seq, n_head, d_head)
-        v = self.v_proj(x).view(n_batch, n_seq, n_head, d_head)
+        q, k, v = torch.split(self.qkv_proj(x), d_head * n_head, dim=-1)
+
+        q = q.view(n_batch, n_seq, n_head, d_head)
+        k = k.view(n_batch, n_seq, n_head, d_head)
+        v = v.view(n_batch, n_seq, n_head, d_head)
 
         q = apply_rotary_emb(q, freqs_cis, d_head)
         k = apply_rotary_emb(k, freqs_cis, d_head)
@@ -176,14 +177,14 @@ class GatedFeedForward(nn.Module):
         return self.w_out(self.dropout(h))
 
 
-class InternLMBlock(nn.Module):
-    def __init__(self, config: InternLMConfig, dtype=None):
+class QwenBlock(nn.Module):
+    def __init__(self, config: QwenConfig, dtype=None):
         super().__init__()
         self.attn_ln = RMSNorm(
             config.hidden_size,
             eps=config.layernorm_epsilon,
             dtype=dtype)
-        self.attn = InternLMAttention(
+        self.attn = QwenAttention(
             config.hidden_size,
             config.num_attention_heads,
             config.head_hidden_size,
@@ -218,8 +219,8 @@ class InternLMBlock(nn.Module):
         return output, kv_cache
 
 
-class InternLMModel(nn.Module):
-    def __init__(self, config: InternLMConfig, dtype=None):
+class QwenModel(nn.Module):
+    def __init__(self, config: QwenConfig, dtype=None):
         super().__init__()
         self.config = config
         self.word_embedding = Embedding(
@@ -227,7 +228,7 @@ class InternLMModel(nn.Module):
         )
         self.dropout = nn.Dropout(config.dropout_rate)
         self.layers = nn.ModuleList([
-            InternLMBlock(config, dtype=dtype) for i in range(config.num_layers)
+            QwenBlock(config, dtype=dtype) for i in range(config.num_layers)
         ])
         self.final_ln = RMSNorm(
             config.hidden_size, eps=config.layernorm_epsilon, dtype=dtype)

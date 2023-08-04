@@ -13,15 +13,38 @@ from safetensors.torch import save_file, safe_open
 
 from . import chatglm as chatglm_model
 from . import internlm as internlm_model
-modules = [chatglm_model, internlm_model]
-model_types = Union[chatglm_model.ChatGLM2Model, internlm_model.InternLMModel]
-tokenizer_types = Union[chatglm_model.ChatGLM2Tokenizer, internlm_model.InternLMTokenizer]
+from . import qwen as qwen_model
+modules = [
+    chatglm_model,
+    internlm_model,
+    qwen_model,
+]
+model_type_name = Literal[
+    "ChatGLM2Model",
+    "InternLMModel",
+    "QwenModel",
+]
+model_types = Union[
+    chatglm_model.ChatGLM2Model,
+    internlm_model.InternLMModel,
+    qwen_model.QwenModel,
+]
+tokenizer_types = Union[
+    chatglm_model.ChatGLM2Tokenizer,
+    internlm_model.InternLMTokenizer,
+    qwen_model.QwenTokenizer,
+]
+config_types = Union[
+    chatglm_model.ChatGLM2Config,
+    internlm_model.InternLMConfig,
+    qwen_model.QwenConfig,
+]
 
 
 @dataclass
 class LoadConfig():
-    model_type: Literal["ChatGLM2Model", "InternLMModel"]
-    model_config: Union[chatglm_model.ChatGLM2Config, internlm_model.InternLMConfig]
+    model_type: model_type_name
+    model_config: config_types
     quant_type: Literal["none", "int8", "int4g32"] = "none"
     weight_files: list[str] = field(default_factory=list)
     tokenizer_file: str = "sentencepiece.model"
