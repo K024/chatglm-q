@@ -4,7 +4,8 @@ from torch import nn
 from tqdm.auto import tqdm
 from chatglm_q.loader import LoadConfig, load_model_and_tokenizer, save_model_and_tokenizer
 
-_, model, tokenizer = load_model_and_tokenizer("../../models/chatglm2-6b-safe", torch.float32)
+model_path = "../../models/chatglm2-6b-safe"
+config, model, tokenizer = load_model_and_tokenizer(model_path, torch.float32)
 
 # %%
 from chatglm_q.int4.quantizer import get_quant_int4_linear, get_quant_embedding
@@ -32,12 +33,13 @@ for name, module in tqdm(linear_layers.items()):
 # %%
 # set torch_dtype (activation type) as needed
 config = LoadConfig(
-    model_type="ChatGLM2Model",
+    model_type=config.model_type,
     model_config=model.config,
     quant_type="int4g32",
-    torch_dtype="float16"
+    torch_dtype="float16",
+    tokenizer_file=config.tokenizer_file,
 )
 
-save_model_and_tokenizer("../../models/chatglm2-6b-int4g32-naive", config, model, tokenizer)
+save_model_and_tokenizer(model_path.rstrip("/\\") + "-int4g32-naive", config, model, tokenizer)
 
 # %%

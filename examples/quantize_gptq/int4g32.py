@@ -6,7 +6,8 @@ from chatglm_q.loader import LoadConfig, load_model_and_tokenizer, save_model_an
 
 torch.manual_seed(42)
 
-_, model, tokenizer = load_model_and_tokenizer("../../models/chatglm2-6b-safe", torch.float32)
+model_path = "../../models/chatglm2-6b-safe"
+config, model, tokenizer = load_model_and_tokenizer(model_path, torch.float32)
 
 # CEval data from https://github.com/THUDM/ChatGLM2-6B/tree/main/evaluation
 all_data = [
@@ -106,11 +107,12 @@ del current_h
 # %%
 # set torch_dtype (activation type) as needed
 config = LoadConfig(
-    model_type="ChatGLM2Model",
+    model_type=config.model_type,
     model_config=model.config,
     quant_type="int4g32",
-    torch_dtype="float16"
+    torch_dtype="float16",
+    tokenizer_file=config.tokenizer_file,
 )
 
-save_model_and_tokenizer("../../models/chatglm2-6b-int4g32", config, model, tokenizer)
+save_model_and_tokenizer(model_path.rstrip("/\\") + "-int4g32", config, model, tokenizer)
 # %%
